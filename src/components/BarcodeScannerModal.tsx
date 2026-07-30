@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, Upload, Sparkles, SwitchCamera } from 'lucide-react';
+import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, SwitchCamera } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { playBeepSound } from '../utils/barcodeUtils';
 import { Product } from '../types';
@@ -24,13 +24,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const { getProductByBarcode, adjustQuantity } = useInventory();
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const containerId = 'interactive-barcode-scanner';
 
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [scannedProduct, setScannedProduct] = useState<Product | undefined>(undefined);
@@ -47,7 +45,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         }
         scannerRef.current.clear();
       } catch (err) {
-        console.warn('Error stopping html5Qrcode scanner', err);
+        console.warn('Error stopping scanner', err);
       }
       scannerRef.current = null;
     }
@@ -61,21 +59,21 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       if (devices && devices.length > 0) {
         const formatted = devices.map(d => ({
           id: d.id,
-          label: d.label || `Cámara ${d.id.substring(0, 5)}`
+          label: d.label || `Cámara ${d.id.substring(0, 6)}`
         }));
         setCameras(formatted);
 
-        // Prefer rear / environment camera if present
-        const rearCamera = formatted.find(c =>
+        // Prefer rear camera on mobile devices
+        const rearCam = formatted.find(c =>
           /back|rear|trasera|environment|principal|main/i.test(c.label)
         );
 
-        const chosenId = rearCamera ? rearCamera.id : formatted[0].id;
+        const chosenId = rearCam ? rearCam.id : formatted[0].id;
         setSelectedCameraId(chosenId);
         return chosenId;
       }
     } catch (err) {
-      console.warn('Could not enumerate cameras via getCameras()', err);
+      console.warn('Could not list cameras via getCameras()', err);
     }
     return null;
   };
@@ -106,13 +104,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       scannerRef.current = html5Qrcode;
 
-      // Full frame scanning for better detection rate
+      // Full frame video scanning configuration
       const config = {
-        fps: 25,
+        fps: 30,
         disableFlip: false
       };
 
-      // Determine camera target (Camera ID object or facingMode fallback)
       let cameraConfig: string | { facingMode: string } = targetCamId || selectedCameraId;
       if (!cameraConfig) {
         cameraConfig = { facingMode: 'environment' };
@@ -124,15 +121,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         (decodedText) => {
           handleBarcodeDetected(decodedText);
         },
-        () => {
-          // Frame scan callback (silent)
-        }
+        () => {}
       );
 
       setIsScanning(true);
     } catch (err: any) {
       console.error('Camera start error:', err);
-      // Fallback try: fallback to facingMode 'user' or default constraint if camera ID failed
+      // Fallback attempt: facingMode 'user' or default constraint
       try {
         if (scannerRef.current) {
           await scannerRef.current.start(
@@ -149,60 +144,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       }
 
       setCameraError(
-        'No se pudo acceder a la cámara activa. Por favor verifica los permisos de cámara en tu navegador, o usa el botón "Google Lens / Foto" para escanear una imagen.'
+        'No se pudo acceder a la cámara. Por favor otorga permisos de cámara a tu navegador (Chrome/Safari/Edge).'
       );
       setIsScanning(false);
     }
   };
 
-  // Switch camera dropdown
   const handleCameraChange = async (newCamId: string) => {
     setSelectedCameraId(newCamId);
     await startScanner(newCamId);
-  };
-
-  // Google Lens style photo scanner
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsProcessingImage(true);
-    setCameraError(null);
-
-    try {
-      // 1. Try native BarcodeDetector API if supported by browser
-      if ('BarcodeDetector' in window) {
-        try {
-          const barcodeDetector = new (window as any).BarcodeDetector({
-            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code']
-          });
-          const imageBitmap = await createImageBitmap(file);
-          const barcodes = await barcodeDetector.detect(imageBitmap);
-          if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
-            handleBarcodeDetected(barcodes[0].rawValue);
-            setIsProcessingImage(false);
-            return;
-          }
-        } catch (nativeErr) {
-          console.warn('Native BarcodeDetector attempt failed, falling back to html5Qrcode file scan', nativeErr);
-        }
-      }
-
-      // 2. Fallback to html5Qrcode file scanner
-      const tempScanner = new Html5Qrcode('google-lens-file-scanner-temp');
-      const result = await tempScanner.scanFileV2(file, true);
-      if (result && result.decodedText) {
-        handleBarcodeDetected(result.decodedText);
-      } else {
-        setCameraError('No se reconoció un código de barras en la foto. Asegúrate de enfocar bien el código de barras y que haya buena iluminación.');
-      }
-    } catch (err: any) {
-      console.error('Error scanning photo:', err);
-      setCameraError('No se pudo leer el código de barras en la imagen.');
-    } finally {
-      setIsProcessingImage(false);
-      if (e.target) e.target.value = '';
-    }
   };
 
   useEffect(() => {
@@ -219,7 +169,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         }
       };
 
-      const timer = setTimeout(initModal, 250);
+      const timer = setTimeout(initModal, 200);
       return () => {
         isMounted = false;
         clearTimeout(timer);
@@ -230,19 +180,28 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   }, [isOpen]);
 
+  // Handle detected barcode
   const handleBarcodeDetected = (code: string) => {
     const cleanCode = code.trim();
     if (!cleanCode) return;
 
     playBeepSound();
-    setScannedCode(cleanCode);
 
     const found = getProductByBarcode(cleanCode);
-    setScannedProduct(found);
-    setRecentScansCount(prev => prev + 1);
+    if (found) {
+      // Product exists -> Show result with quick stock adjustments
+      setScannedCode(cleanCode);
+      setScannedProduct(found);
+      setRecentScansCount(prev => prev + 1);
 
-    if (!continuousMode) {
+      if (!continuousMode) {
+        stopScanner();
+      }
+    } else {
+      // Product NOT registered -> AUTOMATIC DIRECT REDIRECT to Add Product modal!
       stopScanner();
+      onSelectNewCode(cleanCode);
+      onClose();
     }
   };
 
@@ -260,20 +219,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
-  const handleCreateProduct = () => {
-    if (scannedCode) {
-      onSelectNewCode(scannedCode);
-      onClose();
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D2926]/70 backdrop-blur-sm animate-fade-in">
-      {/* Hidden dummy div for temp file scanner */}
-      <div id="google-lens-file-scanner-temp" className="hidden" />
-
       <div className="relative w-full max-w-lg overflow-hidden bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm shadow-2xl text-[#2D2926] flex flex-col max-h-[92vh]">
         
         {/* Header */}
@@ -283,8 +232,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               <Camera className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-[#2D2926] text-xl leading-tight">Lector de Código de Barras</h3>
-              <p className="text-xs text-[#2D2926]/60 font-sans">Escáner cámara en vivo & Google Lens</p>
+              <h3 className="font-serif font-bold text-[#2D2926] text-xl leading-tight">Escáner Automático de Código</h3>
+              <p className="text-xs text-[#2D2926]/60 font-sans">Apunta la cámara de tu celu o PC al código de barras</p>
             </div>
           </div>
           <button
@@ -298,10 +247,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         {/* Scanner Body */}
         <div className="p-6 overflow-y-auto space-y-4 flex-1 font-sans">
           
-          {/* Camera Selection Dropdown & Controls */}
+          {/* Controls Bar */}
           <div className="flex flex-col gap-2.5 px-4 py-3 bg-[#EFE9E2] rounded-sm border border-[#2D2926]/10 text-xs">
             
-            {/* Camera Select Dropdown */}
+            {/* Camera Select Dropdown (if multiple cameras present) */}
             {cameras.length > 1 && (
               <div className="flex items-center gap-2">
                 <SwitchCamera className="w-4 h-4 text-[#2D2926]/70" />
@@ -320,7 +269,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer text-[#2D2926] font-bold uppercase tracking-wider text-[11px]">
                 <input
                   type="checkbox"
@@ -331,57 +280,28 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 <span>Escaneo continuo</span>
               </label>
 
-              <div className="flex items-center gap-2">
-                {/* Google Lens Image Scan Trigger */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessingImage}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-[#2D2926] text-white hover:bg-[#403C39] rounded-sm transition uppercase font-bold text-[10px] tracking-wider shadow-sm"
-                  title="Escanear foto estilo Google Lens"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                  <span>Google Lens / Foto</span>
-                </button>
-
-                <button
-                  onClick={() => startScanner(selectedCameraId)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-[#2D2926]/80 hover:text-[#2D2926] hover:bg-[#F7F3EF] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
-                  title="Reiniciar Cámara"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <button
+                onClick={() => startScanner(selectedCameraId)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-[#2D2926] text-white hover:bg-[#403C39] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reiniciar Cámara</span>
+              </button>
             </div>
           </div>
 
           {/* Camera Viewport */}
-          <div className="relative overflow-hidden rounded-sm bg-[#2D2926] border-2 border-[#2D2926] min-h-[240px] flex items-center justify-center">
+          <div className="relative overflow-hidden rounded-sm bg-[#2D2926] border-2 border-[#2D2926] min-h-[250px] flex items-center justify-center">
             
             {/* HTML5 QR Code Mount Element */}
             <div id={containerId} className="w-full h-full overflow-hidden text-center text-white" />
 
-            {/* Processing Photo Indicator */}
-            {isProcessingImage && (
-              <div className="absolute inset-0 bg-[#2D2926]/90 backdrop-blur-xs flex flex-col items-center justify-center space-y-3 text-white z-20">
-                <Sparkles className="w-10 h-10 text-amber-400 animate-spin" />
-                <p className="text-xs font-bold font-mono text-amber-200">Analizando foto con escáner óptico (Google Lens)...</p>
-              </div>
-            )}
-
             {/* Scanning Laser Overlay effect */}
-            {isScanning && !cameraError && !isProcessingImage && (
+            {isScanning && !cameraError && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="relative w-[85%] h-[60%] border-2 border-emerald-400 rounded-sm shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center">
+                <div className="relative w-[85%] h-[65%] border-2 border-emerald-400 rounded-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] flex items-center justify-center">
                   <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_10px_#10b981] animate-pulse" />
-                  <p className="absolute bottom-2 text-[10px] font-mono uppercase tracking-widest text-emerald-300 bg-[#2D2926]/80 px-2 py-0.5 rounded-sm">
+                  <p className="absolute bottom-2 text-[10px] font-mono uppercase tracking-widest text-emerald-300 bg-[#2D2926]/90 px-2 py-0.5 rounded-sm">
                     Apunta la cámara al código...
                   </p>
                 </div>
@@ -389,112 +309,87 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             )}
 
             {/* Error Message Fallback */}
-            {cameraError && !isProcessingImage && (
+            {cameraError && (
               <div className="p-6 text-center space-y-3 bg-[#F7F3EF] text-[#2D2926] w-full h-full flex flex-col justify-center items-center">
                 <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                 <p className="text-xs text-[#2D2926]/80 font-medium">{cameraError}</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => startScanner(selectedCameraId)}
-                    className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
-                  >
-                    Reintentar Cámara
-                  </button>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-amber-900 bg-amber-200 hover:bg-amber-300 rounded-sm transition flex items-center gap-1"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Subir Foto</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => startScanner(selectedCameraId)}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
+                >
+                  Reintentar Cámara
+                </button>
               </div>
             )}
           </div>
 
-          {/* Scanned Result Card */}
-          {scannedCode && (
+          {/* Scanned Existing Product Card */}
+          {scannedCode && scannedProduct && (
             <div className="p-4 bg-[#EFE9E2] border border-[#2D2926]/20 rounded-sm space-y-3 animate-fade-in shadow-md">
               <div className="flex items-center justify-between text-xs text-[#2D2926] font-mono">
-                <span className="font-sans uppercase font-bold tracking-wider text-[10px] text-[#2D2926]/60">Código Detectado:</span>
+                <span className="font-sans uppercase font-bold tracking-wider text-[10px] text-[#2D2926]/60">Código Encontrado:</span>
                 <span className="bg-[#F7F3EF] px-3 py-1 rounded-sm border border-[#2D2926]/20 text-[#2D2926] font-bold text-sm">
                   #{scannedCode}
                 </span>
               </div>
 
-              {scannedProduct ? (
-                <div className="flex items-center gap-3.5 p-3.5 bg-[#F7F3EF] rounded-sm border border-[#2D2926]/10">
-                  {scannedProduct.imageUrl ? (
-                    <img
-                      src={scannedProduct.imageUrl}
-                      alt={scannedProduct.name}
-                      className="w-14 h-14 object-cover rounded-sm border border-[#2D2926]/15"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 bg-[#EFE9E2] rounded-sm flex items-center justify-center text-[#2D2926]/40 font-bold font-serif text-lg">
-                      {scannedProduct.name.substring(0, 2).toUpperCase()}
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-[#2D2926] truncate text-sm">{scannedProduct.name}</h4>
-                    <p className="text-xs text-[#2D2926]/60">{scannedProduct.category} • Precio: ${scannedProduct.sellingPrice}</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs text-[#2D2926]/80 font-medium">
-                        Stock: <strong className="text-[#2D2926] font-mono font-bold text-sm">{scannedProduct.quantity}</strong> {scannedProduct.unit}
-                      </span>
-                    </div>
+              <div className="flex items-center gap-3.5 p-3.5 bg-[#F7F3EF] rounded-sm border border-[#2D2926]/10">
+                {scannedProduct.imageUrl ? (
+                  <img
+                    src={scannedProduct.imageUrl}
+                    alt={scannedProduct.name}
+                    className="w-14 h-14 object-cover rounded-sm border border-[#2D2926]/15"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-14 h-14 bg-[#EFE9E2] rounded-sm flex items-center justify-center text-[#2D2926]/40 font-bold font-serif text-lg">
+                    {scannedProduct.name.substring(0, 2).toUpperCase()}
                   </div>
+                )}
 
-                  {/* Quick Increment Controls */}
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleQuickAdd(-1)}
-                        className="p-1.5 bg-[#2D2926] hover:bg-[#403C39] text-white rounded-sm transition"
-                        title="Restar 1"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleQuickAdd(1)}
-                        className="p-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-sm transition font-bold"
-                        title="Sumar 1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleQuickAdd(5)}
-                        className="px-2 py-1 bg-[#2D2926] hover:bg-[#403C39] text-white rounded-sm font-bold text-xs transition"
-                        title="Sumar 5"
-                      >
-                        +5
-                      </button>
-                    </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-[#2D2926] truncate text-sm">{scannedProduct.name}</h4>
+                  <p className="text-xs text-[#2D2926]/60">{scannedProduct.category} • Precio: ${scannedProduct.sellingPrice}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-xs text-[#2D2926]/80 font-medium">
+                      Stock: <strong className="text-[#2D2926] font-mono font-bold text-sm">{scannedProduct.quantity}</strong> {scannedProduct.unit}
+                    </span>
                   </div>
                 </div>
-              ) : (
-                <div className="p-3 bg-amber-100 border border-amber-300 rounded-sm flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-bold text-amber-900">Producto no registrado</p>
-                    <p className="text-[11px] text-amber-800">¿Deseas darlo de alta ahora con este código?</p>
+
+                {/* Quick Increment Controls */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleQuickAdd(-1)}
+                      className="p-1.5 bg-[#2D2926] hover:bg-[#403C39] text-white rounded-sm transition"
+                      title="Restar 1"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleQuickAdd(1)}
+                      className="p-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-sm transition font-bold"
+                      title="Sumar 1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleQuickAdd(5)}
+                      className="px-2 py-1 bg-[#2D2926] hover:bg-[#403C39] text-white rounded-sm font-bold text-xs transition"
+                      title="Sumar 5"
+                    >
+                      +5
+                    </button>
                   </div>
-                  <button
-                    onClick={handleCreateProduct}
-                    className="whitespace-nowrap px-3 py-2 bg-[#2D2926] hover:bg-[#403C39] text-white font-bold text-xs uppercase tracking-wider rounded-sm transition flex items-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Crear Producto</span>
-                  </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
           {/* Manual Barcode Search Fallback */}
           <form onSubmit={handleManualSearch} className="pt-2">
-            <p className="text-xs text-[#2D2926]/70 font-medium mb-1.5">¿Búsqueda manual por código?</p>
+            <p className="text-xs text-[#2D2926]/70 font-medium mb-1.5">¿Búsqueda o ingreso manual?</p>
             <div className="flex gap-2">
               <input
                 type="text"
