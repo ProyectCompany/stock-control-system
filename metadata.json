@@ -1,0 +1,6 @@
+{
+  "name": "Stock Control System",
+  "description": "Sistema de gestión de inventario con lector de código de barras por cámara, alertas personalizadas de vencimiento y stock bajo, informes en PDF y WhatsApp.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
