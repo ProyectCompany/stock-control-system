@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, Upload, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { playBeepSound } from '../utils/barcodeUtils';
 import { Product } from '../types';
@@ -19,9 +19,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const { getProductByBarcode, adjustQuantity } = useInventory();
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const containerId = 'interactive-barcode-scanner';
 
   const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [scannedProduct, setScannedProduct] = useState<Product | undefined>(undefined);
@@ -48,6 +50,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       await stopScanner();
 
       const html5Qrcode = new Html5Qrcode(containerId, {
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -55,7 +60,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.UPC_A,
           Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.QR_CODE
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+          Html5QrcodeSupportedFormats.ITF
         ],
         verbose: false
       });
@@ -63,8 +70,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       scannerRef.current = html5Qrcode;
 
       const config = {
-        fps: 15,
-        qrbox: { width: 280, height: 160 },
+        fps: 20,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const width = Math.floor(minEdge * 0.85);
+          const height = Math.floor(minEdge * 0.55);
+          return { width, height };
+        },
         aspectRatio: 1.5
       };
 
@@ -83,9 +95,53 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     } catch (err: any) {
       console.error('Camera barcode scan error:', err);
       setCameraError(
-        'No se pudo acceder a la cámara. Por favor asegúrate de otorgar permisos de cámara en tu navegador o escribe el código manualmente.'
+        'No se pudo iniciar la cámara automáticamente. Puedes otorgar permisos a tu navegador, o usar la opción "Google Lens (Subir Foto)" para escanear una imagen del producto.'
       );
       setIsScanning(false);
+    }
+  };
+
+  // Google Lens style photo scanner
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingImage(true);
+    setCameraError(null);
+
+    try {
+      // 1. Try native BarcodeDetector API if supported by browser
+      if ('BarcodeDetector' in window) {
+        try {
+          const barcodeDetector = new (window as any).BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code']
+          });
+          const imageBitmap = await createImageBitmap(file);
+          const barcodes = await barcodeDetector.detect(imageBitmap);
+          if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+            handleBarcodeDetected(barcodes[0].rawValue);
+            setIsProcessingImage(false);
+            return;
+          }
+        } catch (nativeErr) {
+          console.warn('Native BarcodeDetector attempt failed, falling back to html5Qrcode file scan', nativeErr);
+        }
+      }
+
+      // 2. Fallback to html5Qrcode file scanner
+      const tempScanner = new Html5Qrcode('google-lens-file-scanner-temp');
+      const result = await tempScanner.scanFileV2(file, true);
+      if (result && result.decodedText) {
+        handleBarcodeDetected(result.decodedText);
+      } else {
+        setCameraError('No se encontró un código de barras en la imagen. Intenta con una foto más clara o mejor iluminada.');
+      }
+    } catch (err: any) {
+      console.error('Error scanning photo:', err);
+      setCameraError('No se pudo leer el código de barras en la imagen. Asegúrate de enfocar bien el código de barras.');
+    } finally {
+      setIsProcessingImage(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -94,7 +150,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setScannedCode(null);
       setScannedProduct(undefined);
       setRecentScansCount(0);
-      // Small timeout to allow container element rendering
       const timer = setTimeout(() => {
         startScanner();
       }, 300);
@@ -133,7 +188,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const handleQuickAdd = (delta: number) => {
     if (scannedProduct) {
       adjustQuantity(scannedProduct.id, delta, `Scanner directo cámara (${delta > 0 ? '+' : ''}${delta})`);
-      // Update local preview state
       setScannedProduct(prev => prev ? { ...prev, quantity: Math.max(0, prev.quantity + delta) } : undefined);
     }
   };
@@ -149,6 +203,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2D2926]/70 backdrop-blur-sm animate-fade-in">
+      {/* Hidden dummy div for temp file scanner */}
+      <div id="google-lens-file-scanner-temp" className="hidden" />
+
       <div className="relative w-full max-w-lg overflow-hidden bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm shadow-2xl text-[#2D2926] flex flex-col max-h-[92vh]">
         
         {/* Header */}
@@ -159,7 +216,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
             <div>
               <h3 className="font-serif font-bold text-[#2D2926] text-xl leading-tight">Lector de Código de Barras</h3>
-              <p className="text-xs text-[#2D2926]/60 font-sans">Apunta la cámara del dispositivo hacia el código</p>
+              <p className="text-xs text-[#2D2926]/60 font-sans">Cámara en vivo o escáner estilo Google Lens</p>
             </div>
           </div>
           <button
@@ -173,8 +230,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         {/* Scanner Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1 font-sans">
           
-          {/* Controls Bar */}
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#EFE9E2] rounded-sm border border-[#2D2926]/10 text-xs">
+          {/* Controls Bar & Google Lens Image Upload Button */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-[#EFE9E2] rounded-sm border border-[#2D2926]/10 text-xs">
             <label className="flex items-center gap-2 cursor-pointer text-[#2D2926] font-bold uppercase tracking-wider text-[11px]">
               <input
                 type="checkbox"
@@ -185,25 +242,53 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               <span>Escaneo continuo</span>
             </label>
 
-            {isScanning && (
+            <div className="flex items-center gap-2">
+              {/* Google Lens Image Scan Trigger */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
               <button
-                onClick={startScanner}
-                className="flex items-center gap-1.5 px-3 py-1 text-[#2D2926]/80 hover:text-[#2D2926] hover:bg-[#F7F3EF] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessingImage}
+                className="flex items-center gap-1.5 px-3 py-1 bg-[#2D2926] text-white hover:bg-[#403C39] rounded-sm transition uppercase font-bold text-[10px] tracking-wider shadow-sm"
+                title="Escanear una foto tomada o archivo estilo Google Lens"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reiniciar Cámara</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                <span>Google Lens / Foto</span>
               </button>
-            )}
+
+              {isScanning && (
+                <button
+                  onClick={startScanner}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[#2D2926]/80 hover:text-[#2D2926] hover:bg-[#F7F3EF] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Camera Viewport */}
-          <div className="relative overflow-hidden rounded-sm bg-[#2D2926] border-2 border-[#2D2926] min-h-[220px] flex items-center justify-center">
+          <div className="relative overflow-hidden rounded-sm bg-[#2D2926] border-2 border-[#2D2926] min-h-[230px] flex items-center justify-center">
             
             {/* HTML5 QR Code Mount Element */}
             <div id={containerId} className="w-full h-full overflow-hidden text-center text-white" />
 
+            {/* Processing Photo Indicator */}
+            {isProcessingImage && (
+              <div className="absolute inset-0 bg-[#2D2926]/90 backdrop-blur-xs flex flex-col items-center justify-center space-y-3 text-white z-20">
+                <Sparkles className="w-10 h-10 text-amber-400 animate-spin" />
+                <p className="text-xs font-bold font-mono text-amber-200">Analizando foto con escáner óptico (Google Lens)...</p>
+              </div>
+            )}
+
             {/* Scanning Laser Overlay effect */}
-            {isScanning && !cameraError && (
+            {isScanning && !cameraError && !isProcessingImage && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="relative w-[280px] h-[160px] border-2 border-emerald-400 rounded-sm shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center">
                   <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_10px_#10b981] animate-pulse" />
@@ -215,16 +300,25 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             )}
 
             {/* Error Message Fallback */}
-            {cameraError && (
+            {cameraError && !isProcessingImage && (
               <div className="p-6 text-center space-y-3 bg-[#F7F3EF] text-[#2D2926] w-full h-full flex flex-col justify-center items-center">
                 <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                 <p className="text-xs text-[#2D2926]/80 font-medium">{cameraError}</p>
-                <button
-                  onClick={startScanner}
-                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
-                >
-                  Reintentar Cámara
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={startScanner}
+                    className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
+                  >
+                    Reintentar Cámara
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider text-amber-900 bg-amber-200 hover:bg-amber-300 rounded-sm transition flex items-center gap-1"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Subir Foto</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
