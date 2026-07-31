@@ -119,16 +119,28 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     // 1. Strict Checksum & Format Validation
     if (!validateBarcodeFormat(code)) {
-      setScanStatusMsg(`Descartando lectura parcial/inválida (${code})`);
+      setScanStatusMsg(`Descartando lectura inválida (${code})`);
       return;
     }
 
-    // 2. Consensus Buffer Check (Require at least 2 identical frames within 1 second)
+    // 2. Instant Scan for validated EAN-13, EAN-8, UPC-A checksums
+    const hasChecksum = 
+      (code.length === 13 && isValidEAN13(code)) ||
+      (code.length === 8 && isValidEAN8(code)) ||
+      (code.length === 12 && isValidUPCA(code));
+
+    if (hasChecksum) {
+      candidateMapRef.current.clear();
+      setScanStatusMsg(`¡Código verificado por ${engineName}!`);
+      handleBarcodeDetected(code);
+      return;
+    }
+
+    // 3. Consensus Buffer for non-checksum codes (Code 128, Code 39)
     const now = Date.now();
     const entry = candidateMapRef.current.get(code) || { count: 0, lastTime: 0 };
     
-    // Reset candidate if older than 1.2 seconds
-    if (now - entry.lastTime > 1200) {
+    if (now - entry.lastTime > 2500) {
       candidateMapRef.current.set(code, { count: 1, lastTime: now });
       setScanStatusMsg(`Verificando código ${code}... Mantenga firme`);
       return;
@@ -138,7 +150,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     candidateMapRef.current.set(code, { count: newCount, lastTime: now });
 
     if (newCount >= 2) {
-      // Confirmed checksum + consensus match!
       candidateMapRef.current.clear();
       setScanStatusMsg(`¡Código 100% verificado por ${engineName}!`);
       handleBarcodeDetected(code);
@@ -224,7 +235,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       }
 
       const videoTrack = mediaStream.getVideoTracks()[0];
-      if (videoTrack) checkTorchSupport(videoTrack);
+      if (videoTrack) {
+        checkTorchSupport(videoTrack);
+        if ('applyConstraints' in videoTrack) {
+          (videoTrack as any).applyConstraints({
+            advanced: [{ focusMode: 'continuous' }]
+          }).catch(() => {});
+        }
+      }
 
       setScannerEngine('ZXing');
       setIsScanning(true);
