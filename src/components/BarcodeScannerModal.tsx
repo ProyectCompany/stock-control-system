@@ -75,19 +75,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
 
     try {
-      const formatsToSupport = [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.ITF,
-        Html5QrcodeSupportedFormats.QR_CODE
-      ];
-
       const html5QrCode = new Html5Qrcode('html5-reader-viewport', {
-        formatsToSupport,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        },
         verbose: false
       });
 
@@ -95,20 +86,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       const config = {
         fps: 20,
-        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          return {
-            width: Math.floor(viewfinderWidth * 0.85),
-            height: Math.floor(minEdge * 0.5)
-          };
-        },
         aspectRatio: 1.333333
       };
 
       const onScanSuccess = (decodedText: string) => {
         if (!decodedText || isHandlingScanRef.current) return;
         const clean = decodedText.trim();
-        if (!validateBarcodeFormat(clean)) return;
+        if (!clean) return;
 
         handleBarcodeDetected(clean);
       };
