@@ -93,7 +93,19 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
 
     try {
+      const formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ];
+
       const html5QrCode = new Html5Qrcode('html5-reader-viewport', {
+        formatsToSupport,
         experimentalFeatures: {
           useBarCodeDetectorIfSupported: true
         },
@@ -104,6 +116,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       const config = {
         fps: 25,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const width = Math.min(viewfinderWidth - 20, 420);
+          const height = Math.min(viewfinderHeight - 20, 220);
+          return { width: Math.max(width, 200), height: Math.max(height, 100) };
+        },
         aspectRatio: 1.333333,
         disableFlip: false
       };
