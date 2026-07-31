@@ -81,15 +81,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       return;
     }
 
-    // Wait for DOM container to be fully sized & rendered
-    let attempts = 0;
-    while (attempts < 12) {
-      const container = document.getElementById('html5-reader-viewport');
-      if (container && container.clientWidth > 0 && container.clientHeight > 0) {
-        break;
-      }
-      await new Promise(res => setTimeout(res, 80));
-      attempts++;
+    // Wait until DOM element #html5-reader-viewport exists and has layout
+    let container: HTMLElement | null = null;
+    for (let i = 0; i < 15; i++) {
+      container = document.getElementById('html5-reader-viewport');
+      if (container && container.clientWidth > 0) break;
+      await new Promise(res => setTimeout(res, 50));
+    }
+
+    if (!container) {
+      console.warn("Container html5-reader-viewport not ready in DOM");
+      return;
     }
 
     try {
@@ -203,15 +205,22 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   useEffect(() => {
     let isMounted = true;
+    let timer: any = null;
+
     if (isOpen) {
       setScannedCode(null);
       setScannedProduct(undefined);
       setRecentScansCount(0);
 
-      startEngineWithCameraId();
+      timer = setTimeout(() => {
+        if (isMounted) {
+          startEngineWithCameraId();
+        }
+      }, 150);
 
       return () => {
         isMounted = false;
+        if (timer) clearTimeout(timer);
         stopScanner();
       };
     } else {
