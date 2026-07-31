@@ -59,25 +59,23 @@ export const isValidUPCA = (code: string): boolean => {
 // Comprehensive Barcode Format & Integrity Validator
 export const validateBarcodeFormat = (code: string): boolean => {
   const clean = code.trim();
-  if (!clean || clean.length < 4) return false;
+  if (!clean || clean.length < 3 || clean.length > 64) return false;
 
-  // Numeric barcodes (EAN-13, EAN-8, UPC-A, etc.)
-  if (/^\d+$/.test(clean)) {
-    if (clean.length === 13) return isValidEAN13(clean);
-    if (clean.length === 8) return isValidEAN8(clean);
-    if (clean.length === 12) return isValidUPCA(clean);
-    // If it is numeric but not a standard EAN/UPC length, we reject it 
-    // to prevent partial scans from being interpreted as valid codes.
-    return false;
+  // If 13 digits, verify EAN-13 checksum
+  if (clean.length === 13 && /^\d{13}$/.test(clean)) {
+    return isValidEAN13(clean);
+  }
+  // If 8 digits, verify EAN-8 checksum
+  if (clean.length === 8 && /^\d{8}$/.test(clean)) {
+    return isValidEAN8(clean);
+  }
+  // If 12 digits, verify UPC-A checksum
+  if (clean.length === 12 && /^\d{12}$/.test(clean)) {
+    return isValidUPCA(clean);
   }
 
-  // Alphanumeric barcodes (Code 128, Code 39, QR)
-  // Must contain at least one letter/character to be considered alphanumeric
-  if (/[a-zA-Z]/.test(clean)) {
-    return clean.length >= 4 && clean.length <= 64;
-  }
-  
-  return false;
+  // General valid barcode format (Code 128, Code 39, ITF, QR, custom codes)
+  return clean.length >= 3 && clean.length <= 64;
 };
 
 // Generate random EAN-13 style numeric barcode string

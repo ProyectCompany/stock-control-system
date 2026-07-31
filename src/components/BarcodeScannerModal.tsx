@@ -160,13 +160,29 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     if (!videoRef.current) return;
 
+    // Verify browser supports mediaDevices
+    if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const isHttps = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+      if (!isHttps) {
+        setCameraError('El acceso a la cámara en Vercel requiere estar en una conexión segura (HTTPS).');
+      } else {
+        setCameraError('Tu navegador o dispositivo no admite el acceso directo a la cámara.');
+      }
+      setIsScanning(false);
+      return;
+    }
+
     try {
       const hints = new Map();
       const formats = [
         BarcodeFormat.EAN_13,
         BarcodeFormat.EAN_8,
         BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.ITF,
+        BarcodeFormat.QR_CODE
       ];
       hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
       hints.set(DecodeHintType.TRY_HARDER, true);
@@ -174,18 +190,37 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       const codeReader = new BrowserMultiFormatReader(hints);
       zxingReaderRef.current = codeReader;
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+      // Progressive camera constraint fallback for mobile/Vercel support
+      let mediaStream: MediaStream | null = null;
+      const constraintCandidates = [
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        { video: { facingMode: 'environment' } },
+        { video: { facingMode: 'user' } },
+        { video: true }
+      ];
+
+      let lastErr: any = null;
+      for (const constraints of constraintCandidates) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (mediaStream) break;
+        } catch (e) {
+          lastErr = e;
         }
-      });
+      }
+
+      if (!mediaStream) {
+        throw lastErr || new Error('No media stream available');
+      }
 
       streamRef.current = mediaStream;
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video play deferred or interrupted:', playErr);
+        }
       }
 
       const videoTrack = mediaStream.getVideoTracks()[0];
@@ -193,15 +228,25 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       setScannerEngine('ZXing');
       setIsScanning(true);
-      setScanStatusMsg('Lector ZXing HD Activo con Verificación Checksum');
+      setScanStatusMsg('Lector ZXing HD Activo');
 
       codeReader.decodeFromStream(mediaStream, videoRef.current, (result, error) => {
         if (result && result.getText()) {
           processCandidateCode(result.getText(), 'ZXing HD');
         }
       });
-    } catch (err) {
-      console.warn('ZXing scanner start failed, switching to Quagga engine fallback', err);
+    } catch (err: any) {
+      console.warn('ZXing scanner start failed, trying Quagga fallback:', err);
+      
+      const errName = err?.name || '';
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        setCameraError(
+          'Permiso de cámara denegado. Haz clic en el ícono del candado (🔒) en la barra de direcciones de tu navegador y activa los permisos de cámara.'
+        );
+        setIsScanning(false);
+        return;
+      }
+
       startQuaggaFallbackScanner();
     }
   };
@@ -239,11 +284,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         },
         locate: true
       },
-      (err) => {
+      (err: any) => {
         if (err) {
           console.error('Quagga init error:', err);
+          const isPermissionErr = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
           setCameraError(
-            'No se pudo acceder a la cámara. Por favor otorga permisos de cámara a tu navegador (Chrome/Safari/Edge) o ingresa el código manualmente.'
+            isPermissionErr
+              ? 'Permiso de cámara denegado. Por favor otorga permisos de cámara a tu navegador (Chrome/Safari/Edge).'
+              : 'No se pudo acceder a la cámara de tu dispositivo. Verifica que ninguna otra aplicación esté usando la cámara o ingresa el código manualmente.'
           );
           setIsScanning(false);
           return;
