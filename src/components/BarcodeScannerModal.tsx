@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
+import Quagga from '@ericblade/quagga2';
 import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, CheckCircle, ShieldCheck, Check } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { playBeepSound } from '../utils/barcodeUtils';
@@ -18,9 +18,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 }) => {
   const { getProductByBarcode, adjustQuantity } = useInventory();
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const isHandlingScanRef = useRef<boolean>(false);
   const lastScannedCodeRef = useRef<string | null>(null);
   const scanDebounceTimerRef = useRef<any>(null);
@@ -35,36 +33,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [continuousMode, setContinuousMode] = useState(false);
   const [recentScansCount, setRecentScansCount] = useState(0);
 
-  // Cleanly stop scanner and release all hardware camera tracks
+  // Stop Quagga engine cleanly and release camera
   const stopScanner = () => {
-    if (readerRef.current) {
-      try {
-        readerRef.current.reset();
-      } catch (e) {
-        console.warn('Error closing ZXing reader:', e);
-      }
-      readerRef.current = null;
-    }
-
-    if (streamRef.current) {
-      try {
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-        });
-      } catch (e) {
-        console.warn('Error stopping stream tracks:', e);
-      }
-      streamRef.current = null;
-    }
-
-    if (videoRef.current && videoRef.current.srcObject) {
-      try {
-        const activeStream = videoRef.current.srcObject as MediaStream;
-        activeStream.getTracks().forEach(track => track.stop());
-        videoRef.current.srcObject = null;
-      } catch (e) {
-        console.warn('Error clearing video srcObject:', e);
-      }
+    try {
+      Quagga.offDetected(handleQuaggaDetected);
+      Quagga.stop();
+    } catch (e) {
+      console.warn('Error stopping Quagga:', e);
     }
 
     if (scanDebounceTimerRef.current) {
@@ -76,8 +51,20 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setIsLoading(false);
   };
 
-  // Start ZXing Browser Scanner Engine
-  const startZXingScanner = async () => {
+  // Quagga detection callback
+  const handleQuaggaDetected = (data: any) => {
+    if (!data || !data.codeResult || !data.codeResult.code) return;
+    const rawCode = data.codeResult.code.trim();
+    if (!rawCode || isHandlingScanRef.current) return;
+
+    // Filter out obvious low-confidence readings if format has high error rate
+    if (data.codeResult.format === 'ean_13' && rawCode.length !== 13) return;
+
+    handleBarcodeScanned(rawCode);
+  };
+
+  // Start Quagga2 Barcode Engine
+  const startQuaggaScanner = async () => {
     setCameraError(null);
     setSuccessMsg(null);
     setIsLoading(true);
@@ -86,7 +73,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     stopScanner();
 
-    // Check secure context
+    // Check secure context (HTTPS / Localhost)
     const isHttps = typeof window !== 'undefined' && (window.location.protocol === 'https:' || window.location.hostname === 'localhost');
     if (!isHttps) {
       setCameraError('El acceso a la cámara en el navegador requiere estar en una conexión segura (HTTPS).');
@@ -94,95 +81,77 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       return;
     }
 
-    // Verify browser supports mediaDevices API
-    if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraError('Tu navegador o dispositivo no admite el acceso directo a la cámara.');
+    // Wait until target container element is rendered
+    let targetEl: HTMLElement | null = null;
+    for (let i = 0; i < 15; i++) {
+      targetEl = containerRef.current || document.getElementById('quagga-reader-container');
+      if (targetEl && targetEl.clientWidth > 0) break;
+      await new Promise(res => setTimeout(res, 50));
+    }
+
+    if (!targetEl) {
+      setCameraError('No se encontró el contenedor de cámara en la pantalla.');
       setIsLoading(false);
       return;
     }
 
-    try {
-      // Configure formats: EAN-13, EAN-8, UPC-A, UPC-E, CODE-128, CODE-39
-      const hints = new Map();
-      const formats = [
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E,
-        BarcodeFormat.CODE_128,
-        BarcodeFormat.CODE_39
-      ];
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-
-      const codeReader = new BrowserMultiFormatReader(hints);
-      readerRef.current = codeReader;
-
-      // Progressive constraint strategy for rear camera
-      let mediaStream: MediaStream | null = null;
-      const constraintCandidates = [
-        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-        { video: { facingMode: 'environment' } },
-        { video: { facingMode: 'user' } },
-        { video: true }
-      ];
-
-      let lastError: any = null;
-      for (const constraints of constraintCandidates) {
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-          if (mediaStream) break;
-        } catch (e) {
-          lastError = e;
-        }
-      }
-
-      if (!mediaStream) {
-        throw lastError || new Error('No camera stream available');
-      }
-
-      streamRef.current = mediaStream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.warn('Video play promise deferred:', playErr);
-        }
-      }
-
-      setIsLoading(false);
-      setIsScanning(true);
-
-      // Start continuous ZXing decoding loop
-      codeReader.decodeFromStream(mediaStream, videoRef.current, (result, error) => {
-        if (result && result.getText()) {
-          const rawText = result.getText().trim();
-          if (rawText) {
-            handleBarcodeScanned(rawText);
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: targetEl,
+          constraints: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
+        },
+        locator: {
+          patchSize: 'medium',
+          halfSample: true
+        },
+        numOfWorkers: Math.min(navigator.hardwareConcurrency || 4, 4),
+        frequency: 20,
+        decoder: {
+          readers: [
+            'ean_reader',
+            'ean_8_reader',
+            'code_128_reader',
+            'upc_reader',
+            'upc_e_reader',
+            'code_39_reader'
+          ]
+        },
+        locate: true
+      },
+      (err: any) => {
+        setIsLoading(false);
+
+        if (err) {
+          console.error('Quagga initialization error:', err);
+          const errName = err?.name || '';
+          const isPermissionErr = errName === 'NotAllowedError' || errName === 'PermissionDeniedError';
+          
+          setCameraError(
+            isPermissionErr
+              ? 'Permiso de cámara denegado. Presiona el icono del candado (🔒) en la barra de direcciones de tu navegador y autoriza la cámara.'
+              : 'No se pudo acceder a la cámara de tu dispositivo. Por favor verifica los permisos o presiona Reintentar.'
+          );
+          setIsScanning(false);
+          return;
         }
-      });
 
-    } catch (err: any) {
-      console.error('ZXing Scanner initialization failed:', err);
-      setIsLoading(false);
-      setIsScanning(false);
-
-      const errName = err?.name || '';
-      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-        setCameraError(
-          'Permiso de cámara denegado. Haz clic en el ícono del candado (🔒) en la barra de direcciones de tu navegador y autoriza el acceso a la cámara.'
-        );
-      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
-        setCameraError('No se encontró ninguna cámara disponible en tu dispositivo.');
-      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
-        setCameraError('La cámara ya está siendo utilizada por otra aplicación. Por favor ciérrala y vuelve a intentarlo.');
-      } else {
-        setCameraError('Error al iniciar la cámara. Verifica los permisos de tu navegador o presiona Reintentar.');
+        try {
+          Quagga.start();
+          Quagga.onDetected(handleQuaggaDetected);
+          setIsScanning(true);
+        } catch (startErr) {
+          console.error('Quagga start error:', startErr);
+          setCameraError('Error al iniciar el flujo de video de la cámara.');
+          setIsScanning(false);
+        }
       }
-    }
+    );
   };
 
   useEffect(() => {
@@ -196,7 +165,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       timer = setTimeout(() => {
         if (isMounted) {
-          startZXingScanner();
+          startQuaggaScanner();
         }
       }, 200);
 
@@ -215,7 +184,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     const cleanCode = code.trim();
     if (!cleanCode || isHandlingScanRef.current) return;
 
-    // Prevent immediate duplicate readings of the exact same code
     if (lastScannedCodeRef.current === cleanCode && scanDebounceTimerRef.current) {
       return;
     }
@@ -227,7 +195,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     playBeepSound();
 
     // Show visual confirmation toast
-    setSuccessMsg(`¡Código #${cleanCode} leído correctamente!`);
+    setSuccessMsg(`¡Código #${cleanCode} leído con Quagga!`);
 
     // Check if barcode belongs to an existing product in inventory
     const found = getProductByBarcode(cleanCode);
@@ -238,7 +206,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setRecentScansCount(prev => prev + 1);
 
       if (!continuousMode) {
-        // Stop scanning, release camera, and show product card
         stopScanner();
       } else {
         scanDebounceTimerRef.current = setTimeout(() => {
@@ -265,7 +232,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const handleQuickAdd = (delta: number) => {
     if (scannedProduct) {
-      adjustQuantity(scannedProduct.id, delta, `Lector ZXing (${delta > 0 ? '+' : ''}${delta})`);
+      adjustQuantity(scannedProduct.id, delta, `Lector Quagga (${delta > 0 ? '+' : ''}${delta})`);
       setScannedProduct(prev => prev ? { ...prev, quantity: Math.max(0, prev.quantity + delta) } : undefined);
     }
   };
@@ -283,8 +250,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               <Camera className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-[#2D2926] text-lg sm:text-xl leading-tight">Escáner de Barras ZXing</h3>
-              <p className="text-xs text-[#2D2926]/60">Lectura profesional multilente (EAN-13, EAN-8, UPC, Code 128)</p>
+              <h3 className="font-serif font-bold text-[#2D2926] text-lg sm:text-xl leading-tight">Escáner de Barras Quagga2</h3>
+              <p className="text-xs text-[#2D2926]/60">Reconocimiento multitrama 1D (EAN-13, EAN-8, UPC, Code 128)</p>
             </div>
           </div>
           <button
@@ -312,7 +279,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </label>
 
             <button
-              onClick={startZXingScanner}
+              onClick={startQuaggaScanner}
               className="flex items-center gap-1.5 px-3 py-1 bg-[#2D2926] text-white hover:bg-[#403C39] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -320,25 +287,18 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </button>
           </div>
 
-          {/* Camera Viewport Container */}
+          {/* Camera Viewport Container for Quagga */}
           <div
-            className="relative overflow-hidden rounded-sm bg-black border-2 border-[#2D2926] min-h-[280px] sm:min-h-[300px] flex items-center justify-center"
+            ref={containerRef}
+            id="quagga-reader-container"
+            className="relative overflow-hidden rounded-sm bg-black border-2 border-[#2D2926] min-h-[280px] sm:min-h-[300px] flex items-center justify-center [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_canvas.drawingBuffer]:absolute [&_canvas.drawingBuffer]:inset-0 [&_canvas.drawingBuffer]:pointer-events-none"
           >
-            {/* HTML5 Video Element for ZXing Stream */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-
             {/* Loading Indicator while camera initializes */}
             {isLoading && !cameraError && (
               <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white space-y-3 z-20">
                 <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
                 <span className="text-xs font-bold uppercase tracking-widest text-emerald-300">
-                  Iniciando cámara trasera...
+                  Iniciando motor Quagga2...
                 </span>
               </div>
             )}
@@ -359,7 +319,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
                 <div className="mt-3 flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-300 bg-[#2D2926]/90 px-3.5 py-1.5 rounded-sm shadow-md border border-emerald-500/30">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                  <span>Buscando código... Apunte la cámara al código</span>
+                  <span>Apunte la cámara al código de barras</span>
                 </div>
               </div>
             )}
@@ -378,8 +338,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                 <p className="text-xs text-[#2D2926]/80 font-medium max-w-xs">{cameraError}</p>
                 <button
-                  onClick={startZXingScanner}
-                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
+                  onClick={startQuaggaScanner}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition font-bold"
                 >
                   Reintentar Cámara
                 </button>
@@ -391,7 +351,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           <div className="p-3 bg-[#EFE9E2] border border-[#2D2926]/10 rounded-sm text-[11px] text-[#2D2926]/80 flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0" />
             <span>
-              <strong>Lector ZXing:</strong> Apunte la cámara al código de barras. Al detectar el código, se completará automáticamente en el formulario.
+              <strong>Lector Quagga2:</strong> Apunte la cámara al código de barras. Al detectar el código, se completará automáticamente en el formulario.
             </span>
           </div>
 
