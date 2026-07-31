@@ -5,18 +5,18 @@ export const playBeepSound = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 pitch
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.15);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.15);
+    osc.stop(ctx.currentTime + 0.2);
   } catch (e) {
-    // AudioContext might be blocked until user gesture, ignore silently
+    console.warn("Audio play blocked", e);
   }
 };
 
@@ -66,12 +66,18 @@ export const validateBarcodeFormat = (code: string): boolean => {
     if (clean.length === 13) return isValidEAN13(clean);
     if (clean.length === 8) return isValidEAN8(clean);
     if (clean.length === 12) return isValidUPCA(clean);
-    // Standard valid length for custom numeric barcodes
-    return clean.length >= 6 && clean.length <= 16;
+    // If it is numeric but not a standard EAN/UPC length, we reject it 
+    // to prevent partial scans from being interpreted as valid codes.
+    return false;
   }
 
   // Alphanumeric barcodes (Code 128, Code 39, QR)
-  return clean.length >= 4 && clean.length <= 64;
+  // Must contain at least one letter/character to be considered alphanumeric
+  if (/[a-zA-Z]/.test(clean)) {
+    return clean.length >= 4 && clean.length <= 64;
+  }
+  
+  return false;
 };
 
 // Generate random EAN-13 style numeric barcode string

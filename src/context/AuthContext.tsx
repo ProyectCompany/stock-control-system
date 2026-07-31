@@ -10,11 +10,11 @@ interface AuthContextType {
 
 const DEFAULT_PROFILE: UserProfile = {
   uid: 'user-ezequiel-1212',
-  displayName: 'Ezequiel Luis Lucca',
-  email: 'ezequiellucca1212@gmail.com',
-  photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  businessName: 'Distribuidora Central',
-  whatsappNumber: '+5491155554321',
+  displayName: '',
+  email: '',
+  photoURL: '',
+  businessName: '',
+  whatsappNumber: '',
   defaultMinStock: 5,
   defaultExpirationAlertDays: 7,
   currency: '$',

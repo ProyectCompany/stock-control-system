@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User, Phone, LogOut, LogIn, Check, ShieldCheck, Camera, Upload, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { X, User, Phone, Check, Camera, Upload, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CameraPhotoCapture } from './CameraPhotoCapture';
 
@@ -8,14 +8,7 @@ interface ProfileModalProps {
   onClose: () => void;
 }
 
-const PRESET_AVATARS = [
-  { name: 'Jaguar', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80' },
-  { name: 'Lobo', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80' },
-  { name: 'Águila', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80' },
-  { name: 'Pantera', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80' },
-  { name: 'León', url: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200&auto=format&fit=crop&q=80' },
-  { name: 'Puma', url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&auto=format&fit=crop&q=80' }
-];
+
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, loginWithGoogle, logout, updateProfile } = useAuth();
@@ -146,7 +139,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                       />
                     ) : (
                       <div className="w-full h-full rounded-full bg-[#2D2926] text-white flex items-center justify-center font-bold text-xl font-serif">
-                        {displayName.substring(0, 2).toUpperCase()}
+                        {(displayName || 'U').substring(0, 2).toUpperCase()}
                       </div>
                     )}
 
@@ -211,69 +204,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
 
-                {/* Preset Avatars Selection */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#2D2926]/70 mb-1.5 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-600" />
-                    <span>O elige un avatar de la lista:</span>
-                  </label>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {PRESET_AVATARS.map(avatar => (
-                      <button
-                        key={avatar.name}
-                        type="button"
-                        onClick={() => setPhotoURL(avatar.url)}
-                        className={`p-0.5 rounded-full border-2 transition shrink-0 ${
-                          photoURL === avatar.url ? 'border-emerald-600 scale-105' : 'border-transparent opacity-70 hover:opacity-100'
-                        }`}
-                        title={avatar.name}
-                      >
-                        <img
-                          src={avatar.url}
-                          alt={avatar.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
               </div>
             )}
           </div>
 
-          {/* Google Auth Status Banner */}
-          <div className="p-3.5 bg-[#EFE9E2] rounded-sm border border-[#2D2926]/15 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-[#2D2926] flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#2D2926]/60">Google Account</p>
-                <p className="text-xs font-bold text-[#2D2926]">{user.email}</p>
-              </div>
-            </div>
 
-            {user.isLoggedIn ? (
-              <button
-                type="button"
-                onClick={logout}
-                className="px-2.5 py-1 bg-red-900 hover:bg-red-950 text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition flex items-center gap-1"
-              >
-                <LogOut className="w-3 h-3" />
-                <span>Salir</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={loginWithGoogle}
-                className="px-3 py-1 bg-[#2D2926] hover:bg-[#403C39] text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition flex items-center gap-1 shadow"
-              >
-                <LogIn className="w-3 h-3 text-emerald-400" />
-                <span>Conectar</span>
-              </button>
-            )}
-          </div>
 
           {/* User & Store Details */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
