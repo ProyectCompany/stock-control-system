@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
-import Quagga from '@ericblade/quagga2';
-import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, Flashlight, CheckCircle, Zap, ShieldCheck } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, Flashlight, CheckCircle, ShieldCheck } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
-import { playBeepSound, validateBarcodeFormat, isValidEAN13, isValidEAN8, isValidUPCA } from '../utils/barcodeUtils';
+import { playBeepSound, validateBarcodeFormat } from '../utils/barcodeUtils';
 import { Product } from '../types';
 
 interface BarcodeScannerModalProps {
@@ -19,14 +18,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 }) => {
   const { getProductByBarcode, adjustQuantity } = useInventory();
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const quaggaContainerRef = useRef<HTMLDivElement | null>(null);
-  const zxingReaderRef = useRef<BrowserMultiFormatReader | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const isHandlingScanRef = useRef<boolean>(false);
-  const candidateMapRef = useRef<Map<string, { count: number; lastTime: number }>>(new Map());
 
-  const [scannerEngine, setScannerEngine] = useState<'ZXing' | 'Quagga'>('ZXing');
   const [isScanning, setIsScanning] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
@@ -40,288 +34,135 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   // Stop scanner & free camera media tracks
   const stopScanner = async () => {
-    // Stop ZXing
-    if (zxingReaderRef.current) {
+    if (scannerRef.current) {
       try {
-        zxingReaderRef.current.reset();
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear();
       } catch (e) {
-        // ignore
+        console.warn('Error al detener scanner:', e);
       }
-      zxingReaderRef.current = null;
+      scannerRef.current = null;
     }
-
-    // Stop Quagga
-    try {
-      Quagga.offDetected(onQuaggaDetected);
-      Quagga.stop();
-    } catch (err) {
-      // ignore
-    }
-
-    // Stop media stream tracks
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    if (videoRef.current && videoRef.current.srcObject) {
-      const activeStream = videoRef.current.srcObject as MediaStream;
-      activeStream.getTracks().forEach(t => t.stop());
-      videoRef.current.srcObject = null;
-    }
-
     setIsScanning(false);
     setTorchOn(false);
-    candidateMapRef.current.clear();
   };
 
-  // Toggle Torch / Flashlight
   const toggleTorch = async () => {
+    if (!scannerRef.current || !hasTorch) return;
     try {
-      let activeTrack: MediaStreamTrack | null = null;
-      if (streamRef.current) {
-        activeTrack = streamRef.current.getVideoTracks()[0] || null;
-      } else {
-        activeTrack = Quagga.CameraAccess.getActiveTrack();
-      }
-
-      if (activeTrack && 'applyConstraints' in activeTrack) {
-        const nextState = !torchOn;
-        await (activeTrack as any).applyConstraints({
-          advanced: [{ torch: nextState }]
-        });
-        setTorchOn(nextState);
-      }
+      const nextState = !torchOn;
+      await scannerRef.current.applyVideoConstraints({
+        advanced: [{ torch: nextState }] as any
+      });
+      setTorchOn(nextState);
     } catch (err) {
-      console.warn('Torch toggle failed', err);
+      console.warn('Torch toggle error:', err);
     }
   };
 
-  const checkTorchSupport = (track: MediaStreamTrack) => {
-    try {
-      if (track && 'getCapabilities' in track) {
-        const capabilities = (track as any).getCapabilities();
-        if (capabilities && capabilities.torch) {
-          setHasTorch(true);
-          return;
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-    setHasTorch(false);
-  };
-
-  // Raw candidate filtering with checksum & consensus verification
-  const processCandidateCode = (rawCode: string, engineName: string) => {
-    if (!rawCode || isHandlingScanRef.current) return;
-    const code = rawCode.trim();
-
-    // 1. Strict Checksum & Format Validation
-    if (!validateBarcodeFormat(code)) {
-      setScanStatusMsg(`Descartando lectura inválida (${code})`);
-      return;
-    }
-
-    // 2. Instant Scan for validated EAN-13, EAN-8, UPC-A checksums
-    const hasChecksum = 
-      (code.length === 13 && isValidEAN13(code)) ||
-      (code.length === 8 && isValidEAN8(code)) ||
-      (code.length === 12 && isValidUPCA(code));
-
-    if (hasChecksum) {
-      candidateMapRef.current.clear();
-      setScanStatusMsg(`¡Código verificado por ${engineName}!`);
-      handleBarcodeDetected(code);
-      return;
-    }
-
-    // 3. Consensus Buffer for non-checksum codes (Code 128, Code 39)
-    const now = Date.now();
-    const entry = candidateMapRef.current.get(code) || { count: 0, lastTime: 0 };
-    
-    if (now - entry.lastTime > 2500) {
-      candidateMapRef.current.set(code, { count: 1, lastTime: now });
-      setScanStatusMsg(`Verificando código ${code}... Mantenga firme`);
-      return;
-    }
-
-    const newCount = entry.count + 1;
-    candidateMapRef.current.set(code, { count: newCount, lastTime: now });
-
-    if (newCount >= 2) {
-      candidateMapRef.current.clear();
-      setScanStatusMsg(`¡Código 100% verificado por ${engineName}!`);
-      handleBarcodeDetected(code);
-    }
-  };
-
-  // Quagga callback
-  const onQuaggaDetected = (data: any) => {
-    if (data && data.codeResult && data.codeResult.code) {
-      processCandidateCode(data.codeResult.code, 'Quagga 1D');
-    }
-  };
-
-  // Primary Industrial Engine: ZXing
-  const startZXingScanner = async () => {
+  const startEngine = async () => {
     setCameraError(null);
     isHandlingScanRef.current = false;
     await stopScanner();
 
-    if (!videoRef.current) return;
-
-    // Verify browser supports mediaDevices
-    if (!navigator || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      const isHttps = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
-      if (!isHttps) {
-        setCameraError('El acceso a la cámara en Vercel requiere estar en una conexión segura (HTTPS).');
-      } else {
-        setCameraError('Tu navegador o dispositivo no admite el acceso directo a la cámara.');
-      }
-      setIsScanning(false);
+    // Ensure secure context (HTTPS / Localhost)
+    const isHttps = typeof window !== 'undefined' && (window.location.protocol === 'https:' || window.location.hostname === 'localhost');
+    if (!isHttps) {
+      setCameraError('El acceso a la cámara en el navegador requiere estar en una conexión segura (HTTPS).');
       return;
     }
 
     try {
-      const hints = new Map();
-      const formats = [
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E,
-        BarcodeFormat.CODE_128,
-        BarcodeFormat.CODE_39,
-        BarcodeFormat.ITF,
-        BarcodeFormat.QR_CODE
-      ];
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-
-      const codeReader = new BrowserMultiFormatReader(hints);
-      zxingReaderRef.current = codeReader;
-
-      // Progressive camera constraint fallback for mobile/Vercel support
-      let mediaStream: MediaStream | null = null;
-      const constraintCandidates = [
-        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-        { video: { facingMode: 'environment' } },
-        { video: { facingMode: 'user' } },
-        { video: true }
+      const formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE
       ];
 
-      let lastErr: any = null;
-      for (const constraints of constraintCandidates) {
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-          if (mediaStream) break;
-        } catch (e) {
-          lastErr = e;
-        }
-      }
-
-      if (!mediaStream) {
-        throw lastErr || new Error('No media stream available');
-      }
-
-      streamRef.current = mediaStream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.warn('Video play deferred or interrupted:', playErr);
-        }
-      }
-
-      const videoTrack = mediaStream.getVideoTracks()[0];
-      if (videoTrack) {
-        checkTorchSupport(videoTrack);
-        if ('applyConstraints' in videoTrack) {
-          (videoTrack as any).applyConstraints({
-            advanced: [{ focusMode: 'continuous' }]
-          }).catch(() => {});
-        }
-      }
-
-      setScannerEngine('ZXing');
-      setIsScanning(true);
-      setScanStatusMsg('Lector ZXing HD Activo');
-
-      codeReader.decodeFromStream(mediaStream, videoRef.current, (result, error) => {
-        if (result && result.getText()) {
-          processCandidateCode(result.getText(), 'ZXing HD');
-        }
+      const html5QrCode = new Html5Qrcode('html5-reader-viewport', {
+        formatsToSupport,
+        verbose: false
       });
-    } catch (err: any) {
-      console.warn('ZXing scanner start failed, trying Quagga fallback:', err);
-      
-      const errName = err?.name || '';
-      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-        setCameraError(
-          'Permiso de cámara denegado. Haz clic en el ícono del candado (🔒) en la barra de direcciones de tu navegador y activa los permisos de cámara.'
+
+      scannerRef.current = html5QrCode;
+
+      const config = {
+        fps: 20,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          return {
+            width: Math.floor(viewfinderWidth * 0.85),
+            height: Math.floor(minEdge * 0.5)
+          };
+        },
+        aspectRatio: 1.333333
+      };
+
+      const onScanSuccess = (decodedText: string) => {
+        if (!decodedText || isHandlingScanRef.current) return;
+        const clean = decodedText.trim();
+        if (!validateBarcodeFormat(clean)) return;
+
+        handleBarcodeDetected(clean);
+      };
+
+      const onScanError = () => {
+        // Frame not containing barcode, silent
+      };
+
+      // Progressive camera strategy: back camera ideal -> back camera exact -> any video camera
+      try {
+        await html5QrCode.start(
+          { facingMode: { exact: "environment" } },
+          config,
+          onScanSuccess,
+          onScanError
         );
-        setIsScanning(false);
-        return;
-      }
-
-      startQuaggaFallbackScanner();
-    }
-  };
-
-  // Fallback Engine: Quagga 2 with strict filters
-  const startQuaggaFallbackScanner = async () => {
-    setScannerEngine('Quagga');
-    if (!quaggaContainerRef.current) return;
-
-    Quagga.init(
-      {
-        inputStream: {
-          type: 'LiveStream',
-          target: quaggaContainerRef.current,
-          constraints: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        },
-        locator: {
-          patchSize: 'large',
-          halfSample: false
-        },
-        numOfWorkers: navigator.hardwareConcurrency || 4,
-        frequency: 15,
-        decoder: {
-          readers: [
-            'ean_reader',
-            'ean_8_reader',
-            'code_128_reader',
-            'upc_reader',
-            'upc_e_reader'
-          ]
-        },
-        locate: true
-      },
-      (err: any) => {
-        if (err) {
-          console.error('Quagga init error:', err);
-          const isPermissionErr = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
-          setCameraError(
-            isPermissionErr
-              ? 'Permiso de cámara denegado. Por favor otorga permisos de cámara a tu navegador (Chrome/Safari/Edge).'
-              : 'No se pudo acceder a la cámara de tu dispositivo. Verifica que ninguna otra aplicación esté usando la cámara o ingresa el código manualmente.'
+      } catch (e1) {
+        try {
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            onScanSuccess,
+            onScanError
           );
-          setIsScanning(false);
-          return;
+        } catch (e2) {
+          await html5QrCode.start(
+            { facingMode: "user" },
+            config,
+            onScanSuccess,
+            onScanError
+          );
         }
-
-        Quagga.start();
-        Quagga.onDetected(onQuaggaDetected);
-        checkTorchSupport(Quagga.CameraAccess.getActiveTrack());
-        setIsScanning(true);
-        setScanStatusMsg('Lector Quagga Activo (Modo Verificado)');
       }
-    );
+
+      setIsScanning(true);
+      setScanStatusMsg('Lector Industrial Html5Qrcode Activo');
+
+      try {
+        const capabilities = html5QrCode.getRunningTrackCapabilities();
+        if (capabilities && (capabilities as any).torch) {
+          setHasTorch(true);
+        }
+      } catch (tErr) {}
+
+    } catch (err: any) {
+      console.error('Html5Qrcode engine failed to start:', err);
+      const isPermissionErr = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      setCameraError(
+        isPermissionErr
+          ? 'Permiso de cámara denegado. Presiona el icono del candado (🔒) en la barra de direcciones de tu navegador y autoriza la cámara.'
+          : 'No se pudo acceder a la cámara de tu dispositivo. Revisa los permisos de tu navegador o ingresa el código manualmente.'
+      );
+      setIsScanning(false);
+    }
   };
 
   useEffect(() => {
@@ -333,9 +174,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       const timer = setTimeout(() => {
         if (isMounted) {
-          startZXingScanner();
+          startEngine();
         }
-      }, 250);
+      }, 350);
 
       return () => {
         isMounted = false;
@@ -347,7 +188,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   }, [isOpen]);
 
-  // Confirmed barcode detection
   const handleBarcodeDetected = (code: string) => {
     const cleanCode = code.trim();
     if (!cleanCode || isHandlingScanRef.current) return;
@@ -357,7 +197,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     const found = getProductByBarcode(cleanCode);
     if (found) {
-      // Product EXISTS -> Show product card with stock adjustments
       setScannedCode(cleanCode);
       setScannedProduct(found);
       setRecentScansCount(prev => prev + 1);
@@ -370,7 +209,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         }, 1500);
       }
     } else {
-      // Product DOES NOT EXIST -> AUTOMATIC DIRECT REDIRECTION TO ADD PRODUCT!
       stopScanner();
       onSelectNewCode(cleanCode);
       onClose();
@@ -386,7 +224,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const handleQuickAdd = (delta: number) => {
     if (scannedProduct) {
-      adjustQuantity(scannedProduct.id, delta, `Lector HD ${scannerEngine} (${delta > 0 ? '+' : ''}${delta})`);
+      adjustQuantity(scannedProduct.id, delta, `Lector Industrial (${delta > 0 ? '+' : ''}${delta})`);
       setScannedProduct(prev => prev ? { ...prev, quantity: Math.max(0, prev.quantity + delta) } : undefined);
     }
   };
@@ -405,7 +243,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
             <div>
               <h3 className="font-serif font-bold text-[#2D2926] text-lg sm:text-xl leading-tight">Escáner de Barras HD</h3>
-              <p className="text-xs text-[#2D2926]/60">Lectura 100% exacta con verificación Checksum EAN-13/UPC</p>
+              <p className="text-xs text-[#2D2926]/60">Motor Html5Qrcode con detección nativa por Hardware</p>
             </div>
           </div>
           <button
@@ -432,7 +270,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </label>
 
             <div className="flex items-center gap-2">
-              {/* Flashlight Button */}
               {hasTorch && (
                 <button
                   type="button"
@@ -448,7 +285,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               )}
 
               <button
-                onClick={startZXingScanner}
+                onClick={startEngine}
                 className="flex items-center gap-1.5 px-3 py-1 bg-[#2D2926] text-white hover:bg-[#403C39] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -459,22 +296,18 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
           {/* Camera Viewport Area */}
           <div
-            ref={quaggaContainerRef}
-            className="relative overflow-hidden rounded-sm bg-black border-2 border-[#2D2926] min-h-[260px] sm:min-h-[280px] flex items-center justify-center [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_canvas]:absolute [&_canvas]:inset-0 [&_canvas]:pointer-events-none"
+            className="relative overflow-hidden rounded-sm bg-black border-2 border-[#2D2926] min-h-[260px] sm:min-h-[280px] flex items-center justify-center"
           >
-            {/* HTML5 Video Element for ZXing */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
+            {/* Target element for Html5Qrcode */}
+            <div
+              id="html5-reader-viewport"
+              className="w-full h-full min-h-[260px] sm:min-h-[280px] [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
             />
 
             {/* Scanning Laser Overlay effect */}
             {isScanning && !cameraError && (
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-10">
-                <div className="relative w-[85%] h-[55%] border-2 border-emerald-400 rounded-sm shadow-[0_0_20px_rgba(16,185,129,0.6)] flex items-center justify-center">
+                <div className="relative w-[85%] h-[50%] border-2 border-emerald-400 rounded-sm shadow-[0_0_20px_rgba(16,185,129,0.6)] flex items-center justify-center">
                   <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_14px_#10b981] animate-pulse" />
                 </div>
 
@@ -487,11 +320,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
             {/* Camera Error Fallback */}
             {cameraError && (
-              <div className="p-6 text-center space-y-3 bg-[#F7F3EF] text-[#2D2926] w-full h-full flex flex-col justify-center items-center z-20">
+              <div className="absolute inset-0 p-6 text-center space-y-3 bg-[#F7F3EF] text-[#2D2926] w-full h-full flex flex-col justify-center items-center z-20">
                 <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                 <p className="text-xs text-[#2D2926]/80 font-medium">{cameraError}</p>
                 <button
-                  onClick={startZXingScanner}
+                  onClick={startEngine}
                   className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
                 >
                   Reintentar Cámara
@@ -504,7 +337,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           <div className="p-3 bg-[#EFE9E2] border border-[#2D2926]/10 rounded-sm text-[11px] text-[#2D2926]/80 flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0" />
             <span>
-              <strong>Lector de Alta Precisión:</strong> Apunta el código al recuadro verde. La app valida automáticamente el checksum completo (EAN-13, EAN-8, UPC) para garantizar 0 errores.
+              <strong>Lector Industrial:</strong> Mantén el celular a 15-20 cm del producto. La app detecta automáticamente el código con aceleración por hardware.
             </span>
           </div>
 
