@@ -208,15 +208,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setScannedProduct(undefined);
       setRecentScansCount(0);
 
-      const timer = setTimeout(() => {
-        if (isMounted) {
-          startEngineWithCameraId();
-        }
-      }, 300);
+      startEngineWithCameraId();
 
       return () => {
         isMounted = false;
-        clearTimeout(timer);
         stopScanner();
       };
     } else {
