@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
-import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, Flashlight, CheckCircle, ShieldCheck, SwitchCamera } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, Flashlight, CheckCircle, ShieldCheck } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { playBeepSound } from '../utils/barcodeUtils';
 import { Product } from '../types';
@@ -9,11 +9,6 @@ interface BarcodeScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectNewCode: (barcode: string) => void;
-}
-
-interface CameraDevice {
-  id: string;
-  label: string;
 }
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
@@ -26,8 +21,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isHandlingScanRef = useRef<boolean>(false);
 
-  const [availableCameras, setAvailableCameras] = useState<CameraDevice[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [isScanning, setIsScanning] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
@@ -39,7 +32,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [recentScansCount, setRecentScansCount] = useState(0);
   const [scanStatusMsg, setScanStatusMsg] = useState<string>('Apunte al código completo del producto');
 
-  // Stop scanner & free camera media tracks
+  // Stop scanner & free camera media tracks safely
   const stopScanner = async () => {
     if (scannerRef.current) {
       try {
@@ -69,7 +62,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
-  const startEngineWithCameraId = async (targetCameraId?: string) => {
+  const startEngine = async () => {
     setCameraError(null);
     isHandlingScanRef.current = false;
     await stopScanner();
@@ -81,18 +74,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       return;
     }
 
-    // Wait until DOM element #html5-reader-viewport exists and has layout
+    // Wait until DOM element #html5-reader-viewport exists in DOM
     let container: HTMLElement | null = null;
     for (let i = 0; i < 15; i++) {
       container = document.getElementById('html5-reader-viewport');
-      if (container && container.clientWidth > 0) break;
-      await new Promise(res => setTimeout(res, 50));
+      if (container) break;
+      await new Promise(res => setTimeout(res, 40));
     }
 
-    if (!container) {
-      console.warn("Container html5-reader-viewport not ready in DOM");
-      return;
-    }
+    if (!container) return;
 
     try {
       const formatsToSupport = [
@@ -139,47 +129,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         // Silent frame scanning
       };
 
-      // Enumerate hardware cameras for exact device ID selection
-      let cameras: CameraDevice[] = [];
-      try {
-        const discovered = await Html5Qrcode.getCameras();
-        if (discovered && discovered.length > 0) {
-          cameras = discovered.map(c => ({ id: c.id, label: c.label || `Cámara ${c.id.substring(0, 5)}` }));
-          setAvailableCameras(cameras);
-        }
-      } catch (cErr) {
-        console.warn('Camera enumeration warning:', cErr);
-      }
-
-      // Pick target camera
-      let cameraConfig: any = { facingMode: "environment" };
-
-      if (targetCameraId) {
-        cameraConfig = targetCameraId;
-      } else if (cameras.length > 0) {
-        // Find main rear/back camera
-        const backCam = cameras.find(c => /back|rear|environment|trasera|posterior/i.test(c.label)) || cameras[cameras.length - 1];
-        cameraConfig = backCam.id;
-        setSelectedCameraId(backCam.id);
-      }
-
-      // Start Html5Qrcode stream
-      try {
-        await html5QrCode.start(
-          cameraConfig,
-          config,
-          onScanSuccess,
-          onScanError
-        );
-      } catch (startErr) {
-        console.warn('Primary camera start failed, retrying with default environment facingMode:', startErr);
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          config,
-          onScanSuccess,
-          onScanError
-        );
-      }
+      // Standard facingMode environment works on 100% of iOS, Android, and Desktop browsers
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        onScanError
+      );
 
       setIsScanning(true);
       setScanStatusMsg('Lector Activo • Apunte al código');
@@ -197,7 +153,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setCameraError(
         isPermissionErr
           ? 'Permiso de cámara denegado. Presiona el icono del candado (🔒) en la barra de direcciones de tu navegador y autoriza la cámara.'
-          : 'No se pudo acceder a la cámara de tu dispositivo. Revisa los permisos de tu navegador o ingresa el código manualmente.'
+          : 'No se pudo acceder a la cámara. Por favor otorga permisos a tu navegador o presiona Reintentar.'
       );
       setIsScanning(false);
     }
@@ -214,7 +170,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       timer = setTimeout(() => {
         if (isMounted) {
-          startEngineWithCameraId();
+          startEngine();
         }
       }, 150);
 
@@ -310,27 +266,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </label>
 
             <div className="flex items-center gap-2">
-              {/* Camera Switcher Dropdown */}
-              {availableCameras.length > 1 && (
-                <div className="flex items-center gap-1 bg-[#2D2926] text-white px-2 py-1 rounded-sm">
-                  <SwitchCamera className="w-3.5 h-3.5 text-amber-400" />
-                  <select
-                    value={selectedCameraId}
-                    onChange={(e) => {
-                      setSelectedCameraId(e.target.value);
-                      startEngineWithCameraId(e.target.value);
-                    }}
-                    className="bg-transparent text-[10px] font-bold text-white focus:outline-none cursor-pointer"
-                  >
-                    {availableCameras.map((cam, idx) => (
-                      <option key={cam.id} value={cam.id} className="bg-[#2D2926] text-white">
-                        {cam.label.length > 18 ? `Cámara ${idx + 1}` : cam.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               {hasTorch && (
                 <button
                   type="button"
@@ -346,7 +281,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               )}
 
               <button
-                onClick={() => startEngineWithCameraId(selectedCameraId)}
+                onClick={startEngine}
                 className="flex items-center gap-1.5 px-3 py-1 bg-[#2D2926] text-white hover:bg-[#403C39] rounded-sm transition uppercase font-bold text-[10px] tracking-wider"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -386,8 +321,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
                 <p className="text-xs text-[#2D2926]/80 font-medium">{cameraError}</p>
                 <button
-                  onClick={() => startEngineWithCameraId()}
-                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition"
+                  onClick={startEngine}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#2D2926] hover:bg-[#403C39] rounded-sm transition font-bold"
                 >
                   Reintentar Cámara
                 </button>
@@ -399,7 +334,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           <div className="p-3 bg-[#EFE9E2] border border-[#2D2926]/10 rounded-sm text-[11px] text-[#2D2926]/80 flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0" />
             <span>
-              <strong>Escaneo Instantáneo:</strong> Apunta la cámara al código de barras. Si tu teléfono tiene varias cámaras traseras, usa el selector superior para cambiar de lente.
+              <strong>Escaneo Instantáneo:</strong> Apunta la cámara al código de barras. La lectura se realiza de forma automática por hardware.
             </span>
           </div>
 
