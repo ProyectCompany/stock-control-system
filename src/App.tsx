@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { InventoryProvider, useInventory } from './context/InventoryContext';
 import { Header } from './components/Header';
@@ -11,6 +11,8 @@ import { AlertsDrawer } from './components/AlertsDrawer';
 import { ProfileModal } from './components/ProfileModal';
 import { WhatsAppModal } from './components/WhatsAppModal';
 import { TermsAndConditionsModal } from './components/TermsAndConditionsModal';
+import { PwaInstallBanner } from './components/PwaInstallBanner';
+import { PwaInstallModal } from './components/PwaInstallModal';
 import Antigravity from './components/Antigravity';
 import { Product } from './types';
 
@@ -22,6 +24,22 @@ const MainAppContent: React.FC = () => {
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
+
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   // Terms and Conditions Modal State
   const [isTermsAccepted, setIsTermsAccepted] = useState<boolean>(() => {
@@ -115,6 +133,11 @@ const MainAppContent: React.FC = () => {
             onOpenAlerts={() => setIsAlertsOpen(true)}
           />
 
+          {/* Prominent App Download Banner below Main Stats */}
+          <PwaInstallBanner
+            onOpenInstallModal={() => setIsPwaModalOpen(true)}
+          />
+
           {/* Main Inventory Search & Table / Grid View */}
           <InventoryList
             onOpenNewProduct={() => handleOpenNewProduct()}
@@ -135,6 +158,13 @@ const MainAppContent: React.FC = () => {
         onAccept={handleAcceptTerms}
         isReadOnlyMode={isTermsReadOnly && isTermsAccepted}
         onCloseReadOnly={handleCloseTermsReadOnly}
+      />
+
+      {/* PWA Mobile App Install Modal */}
+      <PwaInstallModal
+        isOpen={isPwaModalOpen}
+        onClose={() => setIsPwaModalOpen(false)}
+        deferredPrompt={deferredPrompt}
       />
 
       {/* Modals & Drawers */}

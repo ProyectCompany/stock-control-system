@@ -104,17 +104,6 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Download Native App PWA Trigger */}
-          <button
-            onClick={() => setIsPwaModalOpen(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1.5 sm:px-3 sm:py-2.5 flex items-center gap-1.5 transition text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-sm shadow-sm shrink-0"
-            title="Descargar e instalar la aplicación nativa en tu celular"
-          >
-            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200" />
-            <span className="hidden lg:inline">Descargar App</span>
-            <span className="hidden md:inline lg:hidden">App</span>
-          </button>
-
           {/* WhatsApp Export Quick Button */}
           <button
             onClick={onOpenWhatsAppModal}
