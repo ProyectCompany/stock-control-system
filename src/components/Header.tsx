@@ -1,9 +1,10 @@
-import React from 'react';
-import { Camera, ShieldAlert, MessageSquare, FileText, Package, Palette } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Camera, ShieldAlert, MessageSquare, FileText, Package, Palette, Download, Smartphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useInventory } from '../context/InventoryContext';
 import { useTheme, THEME_OPTIONS } from '../context/ThemeContext';
 import { generateStockPDF } from '../utils/pdfGenerator';
+import { PwaInstallModal } from './PwaInstallModal';
 
 interface HeaderProps {
   onOpenScanner: () => void;
@@ -21,6 +22,22 @@ export const Header: React.FC<HeaderProps> = ({
   const { user } = useAuth();
   const { alerts, products } = useInventory();
   const { theme, setTheme } = useTheme();
+
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   const handlePDFDownload = () => {
     generateStockPDF(products, user);
@@ -87,6 +104,17 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
+          {/* Download Native App PWA Trigger */}
+          <button
+            onClick={() => setIsPwaModalOpen(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2.5 flex items-center gap-1.5 transition text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-sm shadow-sm"
+            title="Descargar e instalar la aplicación nativa en tu celular"
+          >
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200 animate-pulse" />
+            <span className="hidden sm:inline">Descargar App</span>
+            <span className="sm:hidden">App</span>
+          </button>
+
           {/* WhatsApp Export Quick Button */}
           <button
             onClick={onOpenWhatsAppModal}
@@ -148,6 +176,12 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
+
+      <PwaInstallModal
+        isOpen={isPwaModalOpen}
+        onClose={() => setIsPwaModalOpen(false)}
+        deferredPrompt={deferredPrompt}
+      />
     </header>
   );
 };

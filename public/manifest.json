@@ -1,0 +1,19 @@
+{
+  "short_name": "StockControl",
+  "name": "PROYECT COMPANY - Stock Control System",
+  "description": "Sistema de gestión e inventario de stock con escáner de código de barras por cámara.",
+  "icons": [
+    {
+      "src": "/proyect-company-logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#2D2926",
+  "theme_color": "#2D2926",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity", "utilities"]
+}
