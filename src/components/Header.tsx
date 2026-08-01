@@ -54,8 +54,8 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Brand Header with PROYECT COMPANY Logo */}
-        <div className="flex items-center gap-2.5 sm:gap-3.5 cursor-pointer" onClick={onOpenProfile}>
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-sm border-2 border-amber-500/40 bg-[#2D2926] text-white flex items-center justify-center shrink-0 shadow-md overflow-hidden p-0.5">
+        <div className="flex items-center gap-2 sm:gap-3.5 cursor-pointer shrink-0" onClick={onOpenProfile}>
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-sm border-2 border-amber-500/40 bg-[#2D2926] text-white flex items-center justify-center shrink-0 shadow-md overflow-hidden p-0.5">
             <img
               src="/proyect-company-logo.jpg"
               alt="PROYECT COMPANY"
@@ -64,11 +64,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex flex-col">
-            <h1 className="text-sm sm:text-xl font-serif font-extrabold tracking-tight uppercase leading-none text-[#2D2926]">
+            <h1 className="text-xs sm:text-lg lg:text-xl font-serif font-extrabold tracking-tight uppercase leading-none text-[#2D2926]">
               PROYECT COMPANY
             </h1>
-            <span className="text-[9px] sm:text-[10px] tracking-[0.12em] uppercase font-sans font-bold text-amber-700 mt-0.5">
-              Servicios de Programación • {user.businessName || 'Stock Control'}
+            <span className="text-[8px] sm:text-[10px] tracking-[0.12em] uppercase font-sans font-bold text-amber-700 mt-0.5">
+              Servicios de Programación
             </span>
           </div>
         </div>
@@ -107,12 +107,12 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Download Native App PWA Trigger */}
           <button
             onClick={() => setIsPwaModalOpen(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2.5 flex items-center gap-1.5 transition text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-sm shadow-sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1.5 sm:px-3 sm:py-2.5 flex items-center gap-1.5 transition text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-sm shadow-sm shrink-0"
             title="Descargar e instalar la aplicación nativa en tu celular"
           >
-            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200 animate-pulse" />
-            <span className="hidden sm:inline">Descargar App</span>
-            <span className="sm:hidden">App</span>
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200" />
+            <span className="hidden lg:inline">Descargar App</span>
+            <span className="hidden md:inline lg:hidden">App</span>
           </button>
 
           {/* WhatsApp Export Quick Button */}
