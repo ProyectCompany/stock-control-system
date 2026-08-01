@@ -29,13 +29,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
-  const [quantity, setQuantity] = useState<number>(10);
-  const [minStockThreshold, setMinStockThreshold] = useState<number>(user.defaultMinStock || 5);
+  const [quantity, setQuantity] = useState<number | string>(10);
+  const [minStockThreshold, setMinStockThreshold] = useState<number | string>(user.defaultMinStock || 5);
   const [hasExpiration, setHasExpiration] = useState(false);
   const [expirationDate, setExpirationDate] = useState<string>('');
-  const [expirationAlertDays, setExpirationAlertDays] = useState<number>(user.defaultExpirationAlertDays || 7);
-  const [costPrice, setCostPrice] = useState<number>(0);
-  const [sellingPrice, setSellingPrice] = useState<number>(0);
+  const [expirationAlertDays, setExpirationAlertDays] = useState<number | string>(user.defaultExpirationAlertDays || 7);
+  const [costPrice, setCostPrice] = useState<number | string>('');
+  const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [unit, setUnit] = useState('unidades');
   const [supplier, setSupplier] = useState('');
   const [location, setLocation] = useState('');
@@ -91,8 +91,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setHasExpiration(false);
       setExpirationDate('');
       setExpirationAlertDays(user.defaultExpirationAlertDays || 7);
-      setCostPrice(0);
-      setSellingPrice(0);
+      setCostPrice('');
+      setSellingPrice('');
       setUnit('unidades');
       setSupplier('');
       setLocation('');
@@ -416,7 +416,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   type="number"
                   min="0"
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-3 py-1.5 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-sm font-mono font-bold text-[#2D2926] focus:outline-none"
                 />
               </div>
@@ -431,7 +432,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   step="0.01"
                   placeholder="0.00"
                   value={sellingPrice}
-                  onChange={(e) => setSellingPrice(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setSellingPrice(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-3 py-1.5 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-sm font-mono font-bold text-emerald-900 focus:outline-none"
                 />
               </div>
@@ -465,7 +467,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       type="number"
                       min="0"
                       value={minStockThreshold}
-                      onChange={(e) => setMinStockThreshold(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      onChange={(e) => setMinStockThreshold(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       className="w-full px-2.5 py-1.5 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-xs font-mono font-bold text-amber-900"
                     />
                   </div>
@@ -480,7 +483,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       step="0.01"
                       placeholder="0.00"
                       value={costPrice}
-                      onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => setCostPrice(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       className="w-full px-2.5 py-1.5 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-xs font-mono text-[#2D2926]"
                     />
                   </div>
@@ -523,7 +527,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           min="1"
                           max="180"
                           value={expirationAlertDays}
-                          onChange={(e) => setExpirationAlertDays(Math.max(1, parseInt(e.target.value, 10) || 7))}
+                          onChange={(e) => setExpirationAlertDays(e.target.value)}
+                          onFocus={(e) => e.target.select()}
                           className="w-full px-2 py-1 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-xs font-mono font-bold text-red-900"
                         />
                       </div>

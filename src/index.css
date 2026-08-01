@@ -3,8 +3,9 @@
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #F7F3EF;
-    color: #2D2926;
+    background-color: var(--bg-main, #F7F3EF);
+    color: var(--text-main, #2D2926);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   h1, h2, h3, .font-serif {
@@ -16,18 +17,118 @@
   }
 }
 
+/* Color Themes Definitions */
+
+/* 1. Marrón Claro (Default) */
+[data-theme="marron"] {
+  --bg-main: #F7F3EF;
+  --bg-card: #EFE9E2;
+  --text-main: #2D2926;
+  --border-color: rgba(45, 41, 38, 0.2);
+}
+
+/* 2. Modo Oscuro */
+[data-theme="dark"] {
+  --bg-main: #0F172A;
+  --bg-card: #1E293B;
+  --text-main: #F8FAFC;
+  --border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] body {
+  background-color: #0F172A;
+  color: #F8FAFC;
+}
+
+[data-theme="dark"] .bg-\[\#F7F3EF\] {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
+[data-theme="dark"] .bg-\[\#EFE9E2\] {
+  background-color: #1E293B !important;
+  color: #F8FAFC !important;
+}
+
+[data-theme="dark"] .text-\[\#2D2926\] {
+  color: #F8FAFC !important;
+}
+
+[data-theme="dark"] .border-\[\#2D2926\]\/10,
+[data-theme="dark"] .border-\[\#2D2926\]\/15,
+[data-theme="dark"] .border-\[\#2D2926\]\/20 {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* 3. Color Pastel */
+[data-theme="pastel"] body {
+  background-color: #FAF5FF;
+  color: #3B0764;
+}
+
+[data-theme="pastel"] .bg-\[\#F7F3EF\] {
+  background-color: #FAF5FF !important;
+  color: #3B0764 !important;
+}
+
+[data-theme="pastel"] .bg-\[\#EFE9E2\] {
+  background-color: #F3E8FF !important;
+  color: #3B0764 !important;
+}
+
+[data-theme="pastel"] .text-\[\#2D2926\] {
+  color: #3B0764 !important;
+}
+
+/* 4. Color Celeste */
+[data-theme="celeste"] body {
+  background-color: #F0F9FF;
+  color: #0C4A6E;
+}
+
+[data-theme="celeste"] .bg-\[\#F7F3EF\] {
+  background-color: #F0F9FF !important;
+  color: #0C4A6E !important;
+}
+
+[data-theme="celeste"] .bg-\[\#EFE9E2\] {
+  background-color: #E0F2FE !important;
+  color: #0C4A6E !important;
+}
+
+[data-theme="celeste"] .text-\[\#2D2926\] {
+  color: #0C4A6E !important;
+}
+
+/* 5. Color Beige */
+[data-theme="beige"] body {
+  background-color: #FAF8F5;
+  color: #3D3130;
+}
+
+[data-theme="beige"] .bg-\[\#F7F3EF\] {
+  background-color: #FAF8F5 !important;
+  color: #3D3130 !important;
+}
+
+[data-theme="beige"] .bg-\[\#EFE9E2\] {
+  background-color: #F2ECE4 !important;
+  color: #3D3130 !important;
+}
+
+[data-theme="beige"] .text-\[\#2D2926\] {
+  color: #3D3130 !important;
+}
+
 /* Custom scrollbars for editorial look */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #EFE9E2;
+  background: var(--bg-card, #EFE9E2);
 }
 ::-webkit-scrollbar-thumb {
-  background: #2D2926;
+  background: var(--text-main, #2D2926);
   border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #403C39;
 }
