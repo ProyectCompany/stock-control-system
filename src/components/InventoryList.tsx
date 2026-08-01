@@ -96,7 +96,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         
         <div className="flex flex-col md:flex-row gap-2.5 sm:gap-4 items-stretch md:items-center justify-between">
           
-          {/* Search Bar */}
+          {/* Search Bar with Camera Scanner Icon */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#2D2926]/50" />
             <input
@@ -104,8 +104,16 @@ export const InventoryList: React.FC<InventoryListProps> = ({
               placeholder="Buscar por referencia, producto o proveedor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 sm:py-3 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-xs sm:text-sm text-[#2D2926] placeholder-[#2D2926]/40 focus:outline-none focus:border-[#2D2926] font-sans"
+              className="w-full pl-9 pr-10 py-2 sm:py-3 bg-[#F7F3EF] border border-[#2D2926]/20 rounded-sm text-xs sm:text-sm text-[#2D2926] placeholder-[#2D2926]/40 focus:outline-none focus:border-[#2D2926] font-sans"
             />
+            <button
+              type="button"
+              onClick={onOpenScanner}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[#2D2926]/70 hover:text-[#2D2926] hover:bg-[#EFE9E2] rounded-sm transition flex items-center gap-1"
+              title="Buscar producto escaneando código de barras con la cámara"
+            >
+              <Camera className="w-4 h-4 text-emerald-700" />
+            </button>
           </div>
 
           {/* Action Buttons */}

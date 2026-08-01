@@ -35,8 +35,18 @@ const MainAppContent: React.FC = () => {
     setIsProductFormOpen(true);
   };
 
+  const { products } = useInventory();
+
   const handleSelectNewCodeFromScanner = (barcode: string) => {
-    handleOpenNewProduct(barcode);
+    const clean = barcode.trim();
+    if (!clean) return;
+
+    const existing = products.find(p => p.barcode === clean);
+    if (existing) {
+      handleEditProduct(existing);
+    } else {
+      handleOpenNewProduct(clean);
+    }
   };
 
   return (
