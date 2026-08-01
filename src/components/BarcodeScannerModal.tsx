@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Quagga from '@ericblade/quagga2';
 import { X, Camera, Plus, Minus, Search, AlertCircle, RefreshCw, CheckCircle, ShieldCheck, Check } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
-import { playBeepSound } from '../utils/barcodeUtils';
+import { playBeepSound, validateBarcodeFormat, isValidEAN13, isValidEAN8, isValidUPCA } from '../utils/barcodeUtils';
 import { Product } from '../types';
 
 interface BarcodeScannerModalProps {
@@ -22,6 +22,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const isHandlingScanRef = useRef<boolean>(false);
   const lastScannedCodeRef = useRef<string | null>(null);
   const scanDebounceTimerRef = useRef<any>(null);
+  const candidateMapRef = useRef<Map<string, { count: number; lastTime: number }>>(new Map());
 
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
@@ -47,20 +48,57 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       scanDebounceTimerRef.current = null;
     }
 
+    candidateMapRef.current.clear();
     setIsScanning(false);
     setIsLoading(false);
   };
 
-  // Quagga detection callback
+  // Quagga detection callback with strict checksum & candidate filtering
   const handleQuaggaDetected = (data: any) => {
     if (!data || !data.codeResult || !data.codeResult.code) return;
     const rawCode = data.codeResult.code.trim();
     if (!rawCode || isHandlingScanRef.current) return;
 
-    // Filter out obvious low-confidence readings if format has high error rate
-    if (data.codeResult.format === 'ean_13' && rawCode.length !== 13) return;
+    // 1. Basic format & length check
+    if (!validateBarcodeFormat(rawCode)) return;
 
-    handleBarcodeScanned(rawCode);
+    // 2. Strict Checksum validation for EAN-13, EAN-8, UPC-A
+    if (rawCode.length === 13 && /^\d{13}$/.test(rawCode)) {
+      if (!isValidEAN13(rawCode)) return; // Reject false EAN-13 readings!
+    } else if (rawCode.length === 8 && /^\d{8}$/.test(rawCode)) {
+      if (!isValidEAN8(rawCode)) return; // Reject false EAN-8 readings!
+    } else if (rawCode.length === 12 && /^\d{12}$/.test(rawCode)) {
+      if (!isValidUPCA(rawCode)) return; // Reject false UPC-A readings!
+    }
+
+    // 3. Instant capture for mathematically verified EAN/UPC barcodes
+    const isStrictChecksum = 
+      (rawCode.length === 13 && isValidEAN13(rawCode)) ||
+      (rawCode.length === 8 && isValidEAN8(rawCode)) ||
+      (rawCode.length === 12 && isValidUPCA(rawCode));
+
+    if (isStrictChecksum) {
+      candidateMapRef.current.clear();
+      handleBarcodeScanned(rawCode);
+      return;
+    }
+
+    // 4. For non-checksum codes (Code 128, etc.), require 2 identical consecutive frames
+    const now = Date.now();
+    const entry = candidateMapRef.current.get(rawCode) || { count: 0, lastTime: 0 };
+
+    if (now - entry.lastTime > 1500) {
+      candidateMapRef.current.set(rawCode, { count: 1, lastTime: now });
+      return;
+    }
+
+    const newCount = entry.count + 1;
+    candidateMapRef.current.set(rawCode, { count: newCount, lastTime: now });
+
+    if (newCount >= 2) {
+      candidateMapRef.current.clear();
+      handleBarcodeScanned(rawCode);
+    }
   };
 
   // Start Quagga2 Barcode Engine
