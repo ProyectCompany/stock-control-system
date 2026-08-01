@@ -92,12 +92,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-[#EFE9E2] border-b border-[#2D2926]/15 rounded-t-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#2D2926] text-white rounded-sm">
-              <User className="w-5 h-5 text-amber-400" />
+            <div className="w-10 h-10 rounded-sm border border-amber-500/40 bg-[#2D2926] text-white flex items-center justify-center shrink-0 overflow-hidden p-0.5 shadow-sm">
+              <img src="/proyect-company-logo.jpg" alt="PROYECT COMPANY" className="w-full h-full object-cover rounded-2xs" />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-[#2D2926] text-lg sm:text-xl leading-tight">Perfil de Cuenta</h3>
-              <p className="text-xs text-[#2D2926]/60">Configuración de usuario, foto e integración Google</p>
+              <h3 className="font-serif font-bold text-[#2D2926] text-lg sm:text-xl leading-tight">PROYECT COMPANY</h3>
+              <p className="text-xs text-amber-800 font-medium">Dev / Fundador: Ezequiel Luis Lucca • e.lucca@proyectcompany.com</p>
             </div>
           </div>
 

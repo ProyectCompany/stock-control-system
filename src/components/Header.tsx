@@ -36,18 +36,22 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 bg-[#F7F3EF]/95 backdrop-blur-md border-b border-[#2D2926]/10 px-3 sm:px-6 lg:px-10 py-2.5 sm:py-4 transition">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* Brand Header */}
-        <div className="flex items-center gap-2 sm:gap-3.5 cursor-pointer" onClick={onOpenProfile}>
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-sm bg-[#2D2926] text-white flex items-center justify-center shrink-0 shadow-sm">
-            <Package className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
+        {/* Brand Header with PROYECT COMPANY Logo */}
+        <div className="flex items-center gap-2.5 sm:gap-3.5 cursor-pointer" onClick={onOpenProfile}>
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-sm border-2 border-amber-500/40 bg-[#2D2926] text-white flex items-center justify-center shrink-0 shadow-md overflow-hidden p-0.5">
+            <img
+              src="/proyect-company-logo.jpg"
+              alt="PROYECT COMPANY"
+              className="w-full h-full object-cover rounded-2xs"
+            />
           </div>
 
           <div className="flex flex-col">
-            <h1 className="text-sm sm:text-2xl font-serif font-bold tracking-tight uppercase leading-none text-[#2D2926]">
-              Stock Control
+            <h1 className="text-sm sm:text-xl font-serif font-extrabold tracking-tight uppercase leading-none text-[#2D2926]">
+              PROYECT COMPANY
             </h1>
-            <span className="text-[9px] sm:text-[10px] tracking-[0.15em] uppercase font-sans font-bold text-[#2D2926]/60 mt-0.5">
-              {user.businessName || 'Sistema de Gestión'}
+            <span className="text-[9px] sm:text-[10px] tracking-[0.12em] uppercase font-sans font-bold text-amber-700 mt-0.5">
+              Servicios de Programación • {user.businessName || 'Stock Control'}
             </span>
           </div>
         </div>

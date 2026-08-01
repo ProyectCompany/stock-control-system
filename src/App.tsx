@@ -133,6 +133,23 @@ const MainAppContent: React.FC = () => {
         onClose={() => setIsWhatsAppOpen(false)}
       />
 
+      {/* PROYECT COMPANY Footer */}
+      <footer className="relative z-10 border-t border-[#2D2926]/10 py-6 px-4 bg-[#EFE9E2]/60 mt-12 text-center text-xs text-[#2D2926]/70">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <img src="/proyect-company-logo.jpg" alt="PROYECT COMPANY" className="w-8 h-8 rounded-sm object-cover border border-[#2D2926]/20" />
+            <div className="text-left">
+              <p className="font-bold text-[#2D2926] font-serif leading-tight">PROYECT COMPANY</p>
+              <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider">Servicios de programación</p>
+            </div>
+          </div>
+          <div className="text-center sm:text-right font-sans">
+            <p className="font-bold text-[#2D2926]">Dev / Fundador: Ezequiel Luis Lucca</p>
+            <p className="text-[11px] font-mono text-[#2D2926]/60">e.lucca@proyectcompany.com • +54 11</p>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 };
