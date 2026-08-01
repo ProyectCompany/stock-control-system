@@ -10,8 +10,11 @@ import { ProductFormModal } from './components/ProductFormModal';
 import { AlertsDrawer } from './components/AlertsDrawer';
 import { ProfileModal } from './components/ProfileModal';
 import { WhatsAppModal } from './components/WhatsAppModal';
+import { TermsAndConditionsModal } from './components/TermsAndConditionsModal';
 import Antigravity from './components/Antigravity';
 import { Product } from './types';
+
+const TERMS_STORAGE_KEY = 'stock_control_terms_accepted_v1';
 
 const MainAppContent: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -19,6 +22,16 @@ const MainAppContent: React.FC = () => {
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
+
+  // Terms and Conditions Modal State
+  const [isTermsAccepted, setIsTermsAccepted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TERMS_STORAGE_KEY) === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [isTermsReadOnly, setIsTermsReadOnly] = useState<boolean>(false);
 
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [scannedInitialBarcode, setScannedInitialBarcode] = useState<string>('');
@@ -47,6 +60,23 @@ const MainAppContent: React.FC = () => {
     } else {
       handleOpenNewProduct(clean);
     }
+  };
+
+  const handleAcceptTerms = () => {
+    try {
+      localStorage.setItem(TERMS_STORAGE_KEY, 'true');
+    } catch (e) {
+      console.warn('Failed to save terms acceptance:', e);
+    }
+    setIsTermsAccepted(true);
+  };
+
+  const handleOpenTermsReadOnly = () => {
+    setIsTermsReadOnly(true);
+  };
+
+  const handleCloseTermsReadOnly = () => {
+    setIsTermsReadOnly(false);
   };
 
   return (
@@ -95,9 +125,17 @@ const MainAppContent: React.FC = () => {
 
         </main>
 
-        {/* Footer with Mandatory Credits "dev ezequiel luis lucca" */}
-        <Footer />
+        {/* Footer with Developer Contact & Terms */}
+        <Footer onOpenTerms={handleOpenTermsReadOnly} />
       </div>
+
+      {/* Mandatory Terms & Conditions Startup Modal */}
+      <TermsAndConditionsModal
+        isOpen={!isTermsAccepted || isTermsReadOnly}
+        onAccept={handleAcceptTerms}
+        isReadOnlyMode={isTermsReadOnly && isTermsAccepted}
+        onCloseReadOnly={handleCloseTermsReadOnly}
+      />
 
       {/* Modals & Drawers */}
       <BarcodeScannerModal
@@ -132,23 +170,6 @@ const MainAppContent: React.FC = () => {
         isOpen={isWhatsAppOpen}
         onClose={() => setIsWhatsAppOpen(false)}
       />
-
-      {/* PROYECT COMPANY Footer */}
-      <footer className="relative z-10 border-t border-[#2D2926]/10 py-6 px-4 bg-[#EFE9E2]/60 mt-12 text-center text-xs text-[#2D2926]/70">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <img src="/proyect-company-logo.jpg" alt="PROYECT COMPANY" className="w-8 h-8 rounded-sm object-cover border border-[#2D2926]/20" />
-            <div className="text-left">
-              <p className="font-bold text-[#2D2926] font-serif leading-tight">PROYECT COMPANY</p>
-              <p className="text-[10px] text-amber-800 font-bold uppercase tracking-wider">Servicios de programación</p>
-            </div>
-          </div>
-          <div className="text-center sm:text-right font-sans">
-            <p className="font-bold text-[#2D2926]">Dev / Fundador: Ezequiel Luis Lucca</p>
-            <p className="text-[11px] font-mono text-[#2D2926]/60">e.lucca@proyectcompany.com • +54 11</p>
-          </div>
-        </div>
-      </footer>
 
     </div>
   );
