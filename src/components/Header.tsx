@@ -131,18 +131,18 @@ export const Header: React.FC<HeaderProps> = ({
             <Palette className="w-4 h-4 text-emerald-700" />
           </button>
 
-          {/* User Profile / Google Sign In */}
+          {/* User Profile */}
           <button
             onClick={onOpenProfile}
             className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-[#2D2926]/10 text-right hover:opacity-80 transition"
-            title="Ver Perfil y Cuenta de Google"
+            title="Ver Perfil"
           >
             <div className="hidden sm:block">
               <p className="font-sans text-xs font-bold uppercase tracking-wider text-[#2D2926]">
                 {user.displayName.split(' ')[0]}
               </p>
               <p className="font-sans text-[10px] text-[#2D2926]/50 uppercase tracking-widest font-bold">
-                Google Auth
+                Mi Perfil
               </p>
             </div>
 

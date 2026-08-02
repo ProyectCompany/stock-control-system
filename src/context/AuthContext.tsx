@@ -3,7 +3,6 @@ import { UserProfile } from '../types';
 
 interface AuthContextType {
   user: UserProfile;
-  loginWithGoogle: () => void;
   logout: () => void;
   updateProfile: (updated: Partial<UserProfile>) => void;
 }
@@ -45,16 +44,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  const loginWithGoogle = () => {
-    // Simulate seamless Google Login with full profile verification
-    setUser(prev => ({
-      ...prev,
-      isLoggedIn: true,
-      displayName: prev.displayName || 'Ezequiel Luis Lucca',
-      email: prev.email || 'ezequiellucca1212@gmail.com'
-    }));
-  };
-
   const logout = () => {
     setUser(prev => ({
       ...prev,
@@ -67,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loginWithGoogle, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

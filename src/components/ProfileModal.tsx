@@ -12,7 +12,7 @@ interface ProfileModalProps {
 
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, loginWithGoogle, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [displayName, setDisplayName] = useState(user.displayName);
