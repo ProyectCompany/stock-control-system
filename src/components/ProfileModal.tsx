@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User, Phone, Check, Camera, Upload, Link as LinkIcon, Palette } from 'lucide-react';
+import { X, User, Phone, Check, Camera, Upload, Link as LinkIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useTheme, THEME_OPTIONS } from '../context/ThemeContext';
 import { CameraPhotoCapture } from './CameraPhotoCapture';
 
 interface ProfileModalProps {
@@ -13,7 +12,6 @@ interface ProfileModalProps {
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
   const { user, logout, updateProfile } = useAuth();
-  const { theme, setTheme } = useTheme();
 
   const [displayName, setDisplayName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email);
@@ -297,38 +295,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   <option value="COP">COP ($)</option>
                 </select>
               </div>
-            </div>
-          </div>
-
-          {/* SECTION: Personalización de Colores e Interfaz */}
-          <div className="p-3.5 bg-[#EFE9E2] rounded-sm border border-[#2D2926]/15 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[11px] font-bold text-[#2D2926] uppercase tracking-wider flex items-center gap-1.5">
-                <Palette className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Tema de Color de la Interfaz</span>
-              </h4>
-              <span className="text-[10px] text-[#2D2926]/60 font-bold uppercase">5 Estilos</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {THEME_OPTIONS.map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setTheme(opt.id)}
-                  className={`p-2 rounded-sm border text-left transition flex items-center gap-2 ${
-                    theme === opt.id
-                      ? 'border-[#2D2926] bg-[#F7F3EF] shadow-sm ring-1 ring-[#2D2926]'
-                      : 'border-[#2D2926]/20 bg-[#F7F3EF]/70 hover:bg-[#F7F3EF]'
-                  }`}
-                >
-                  <span
-                    className="w-4 h-4 rounded-full border border-[#2D2926]/20 shrink-0 shadow-inner"
-                    style={{ backgroundColor: opt.previewBg }}
-                  />
-                  <span className="text-[11px] font-bold text-[#2D2926] truncate">{opt.name}</span>
-                </button>
-              ))}
             </div>
           </div>
 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, ShieldAlert, MessageSquare, FileText, Package, Palette, Download, Smartphone } from 'lucide-react';
+import { Camera, ShieldAlert, MessageSquare, FileText, Package, Download, Smartphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useInventory } from '../context/InventoryContext';
-import { useTheme, THEME_OPTIONS } from '../context/ThemeContext';
 import { generateStockPDF } from '../utils/pdfGenerator';
 import { PwaInstallModal } from './PwaInstallModal';
 
@@ -21,7 +20,6 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const { alerts, products } = useInventory();
-  const { theme, setTheme } = useTheme();
 
   // PWA Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -41,12 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handlePDFDownload = () => {
     generateStockPDF(products, user);
-  };
-
-  const handleCycleTheme = () => {
-    const currentIndex = THEME_OPTIONS.findIndex(t => t.id === theme);
-    const nextIndex = (currentIndex + 1) % THEME_OPTIONS.length;
-    setTheme(THEME_OPTIONS[nextIndex].id);
   };
 
   return (
@@ -120,15 +112,6 @@ export const Header: React.FC<HeaderProps> = ({
             title="Descargar Reporte PDF"
           >
             <FileText className="w-4 h-4" />
-          </button>
-
-          {/* Theme Palette Switcher */}
-          <button
-            onClick={handleCycleTheme}
-            className="p-1.5 sm:p-2.5 bg-[#EFE9E2] hover:bg-[#E2DAD0] text-[#2D2926] border border-[#2D2926]/15 rounded-sm transition flex items-center gap-1"
-            title={`Cambiar Tema de Color (Actual: ${THEME_OPTIONS.find(t => t.id === theme)?.name})`}
-          >
-            <Palette className="w-4 h-4 text-emerald-700" />
           </button>
 
           {/* User Profile */}
